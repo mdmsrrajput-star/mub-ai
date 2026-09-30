@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MuB AI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <!-- Top Bar -->
+        <header class="topbar">
+            <div class="logo">MuB AI</div>
+            <div class="status">Online</div>
+        </header>
+
+        <!-- Chat Area -->
+        <main class="chat">
+
+            <!-- Welcome Screen -->
+            <section class="welcome">
+
+                <div class="avatar">M</div>
+
+                <h1>How can I help you?</h1>
+
+                <p>
+                    I'm MuB, your personal AI assistant.
+                    Ask me anything.
+                </p>
+
+            </section>
+
+            <!-- Messages -->
+            <section id="messages"></section>
+
+            <!-- Input -->
+            <div class="input-area">
+
+                <input
+                    id="messageInput"
+                    type="text"
+                    placeholder="Message MuB..."
+                    autocomplete="off"
+                >
+
+                <button id="sendButton" type="button">
+                    Send
+                </button>
+
+            </div>
+
+        </main>
+
+    </div>
+
+    <script src="app.js"></script>
+
+</body>
+</html>
