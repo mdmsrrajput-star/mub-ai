@@ -231,3 +231,71 @@ body {
         padding: 0 12px;
     }
 }
+/* ========================================
+   MuB Modern Message Composer
+   ======================================== */
+
+.input-area {
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+#messageInput {
+  min-height: 52px;
+  max-height: 160px;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+.input-area button {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 28px;
+  line-height: 1;
+  border-radius: 16px;
+
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.input-area button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+
+  .input-area {
+    gap: 8px;
+    padding: 10px 0;
+  }
+
+  #messageInput {
+    min-height: 52px;
+    max-height: 140px;
+    padding: 14px;
+    font-size: 16px;
+  }
+
+  .input-area button {
+    width: 52px;
+    height: 52px;
+    flex-basis: 52px;
+    border-radius: 16px;
+    font-size: 26px;
+  }
+
+}
