@@ -45,7 +45,7 @@ function removeThinking() {
   }
 }
 
-function sendMessage() {
+async function sendMessage() {
   if (isThinking) {
     return;
   }
@@ -75,21 +75,41 @@ function sendMessage() {
   // Show thinking state
   showThinking();
 
-  // Temporary response
-  setTimeout(() => {
+  // Ask MuB's AI backend
+try {
+    const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            message: text
+        })
+    });
+
+    const data = await response.json();
+
+    removeThinking();
+
+    if (!response.ok) {
+        throw new Error(data.error || "MuB could not respond.");
+    }
+
+    addMessage(data.reply, "mub");
+
+} catch (error) {
     removeThinking();
 
     addMessage(
-      "I'm MuB. I received your message. My AI brain is coming next.",
-      "mub"
+        error.message || "Sorry, MuB couldn't respond right now.",
+        "mub"
     );
 
+} finally {
     isThinking = false;
     sendButton.disabled = false;
     messageInput.disabled = false;
     messageInput.focus();
-
-  }, 1200);
 }
 
 // Send button
