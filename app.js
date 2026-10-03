@@ -125,5 +125,5 @@ messageInput.addEventListener("keydown", function (event) {
     sendMessage();
 
   }
-
+  
 });
