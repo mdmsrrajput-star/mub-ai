@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     console.error("Server error:", error);
 
     return res.status(500).json({
-      error: "Something went wrong while MuB was processing your message."
-    });
-  }
+  error: error?.message || "Unknown server error"
+});
 }
+  
