@@ -111,6 +111,7 @@ try {
     messageInput.disabled = false;
     messageInput.focus();
 }
+}
 
 // Send button
 sendButton.addEventListener("click", sendMessage);
