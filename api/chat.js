@@ -11,19 +11,33 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "gpt-6-luna",
-        instructions:
-          "You are MuB, a helpful personal AI assistant. Be clear, practical, friendly, and concise. Help the user solve problems rather than merely describing them.",
-        input: message
-      })
-    });
+    const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
+
+if (!apiKey) {
+  return res.status(500).json({
+    error: "OPENAI_API_KEY is missing."
+  });
+}
+
+if (!/^[\x00-\x7F]+$/.test(apiKey)) {
+  return res.status(500).json({
+    error: "OPENAI_API_KEY contains invalid characters. Create a new API key and update Vercel."
+  });
+}
+
+const response = await fetch("https://api.openai.com/v1/responses", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${apiKey}`
+  },
+  body: JSON.stringify({
+    model: "gpt-6luna",
+    instructions:
+      "You are MuB, a helpful personal AI assistant. Be clear, practical, friendly, and concise. Help the user solve problems rather than merely describing them.",
+    input: message
+  })
+});
 
     const data = await response.json();
 
