@@ -1,0 +1,364 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<title>MuB Crypto Intelligence</title>
+
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0b1020;
+  --panel: #141c30;
+  --border: #28334b;
+  --text: #edf2ff;
+  --muted: #9aa8c3;
+  --green: #30d6a0;
+  --red: #ff687d;
+  --blue: #85aaff;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, Arial, sans-serif;
+}
+header {
+  padding: 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-size: 23px; font-weight: 800; }
+.sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+main { max-width: 1050px; margin: auto; padding: 16px; }
+.banner {
+  padding: 12px;
+  border: 1px solid #236d5a;
+  background: #102c2a;
+  color: #70efc4;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 750;
+  margin-bottom: 16px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.panel {
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 15px;
+}
+.label { color: var(--muted); font-size: 12px; }
+.price { font-size: clamp(20px, 5vw, 28px); font-weight: 800; margin: 9px 0; overflow-wrap: anywhere; }
+.change { font-size: 13px; }
+.positive { color: var(--green); }
+.negative { color: var(--red); }
+.section { margin-top: 16px; }
+h2 { font-size: 16px; margin: 0 0 14px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 13px;
+  background: #1b2740;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+button.active { background: #304c80; border-color: var(--blue); }
+#chart { width: 100%; height: 330px; margin-top: 12px; }
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.value { font-size: 19px; font-weight: 750; margin-top: 8px; }
+.note { color: var(--muted); font-size: 12px; line-height: 1.6; }
+footer { padding: 20px 16px; text-align: center; }
+@media (max-width: 480px) {
+  main { padding: 12px; }
+  .panel { padding: 12px; }
+  #chart { height: 290px; }
+  .value { font-size: 16px; }
+}
+</style>
+</head>
+
+<body>
+<header>
+  <div class="brand">MuB Crypto Intelligence</div>
+  <div class="sub">Market dashboard · Phase 1 · Paper trading</div>
+</header>
+
+<main>
+  <div class="banner">
+    PAPER MODE ACTIVE · LIVE ORDER EXECUTION DISABLED
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="label">BTC / USDT</div>
+      <div class="price" id="btcPrice">Loading...</div>
+      <div class="change" id="btcChange">24h change: --</div>
+    </div>
+    <div class="panel">
+      <div class="label">ETH / USDT</div>
+      <div class="price" id="ethPrice">Loading...</div>
+      <div class="change" id="ethChange">24h change: --</div>
+    </div>
+  </div>
+
+  <div class="panel section">
+    <h2>Market chart · 5-minute candles</h2>
+    <div class="controls">
+      <button id="btcButton" class="active"
+        onclick="selectSymbol('BTCUSDT')">BTC / USDT</button>
+      <button id="ethButton"
+        onclick="selectSymbol('ETHUSDT')">ETH / USDT</button>
+      <button onclick="refreshAll()">Refresh now</button>
+    </div>
+    <div id="chart"></div>
+    <div class="note" id="chartStatus">Loading candles...</div>
+  </div>
+
+  <div class="stats section">
+    <div class="panel">
+      <div class="label">Paper account balance</div>
+      <div class="value">$10,000.00</div>
+      <div class="note">Demo balance · No real funds</div>
+    </div>
+    <div class="panel">
+      <div class="label">Signal engine</div>
+      <div class="value" style="color:var(--blue)">WAIT</div>
+      <div class="note">Not yet connected in Phase 1</div>
+    </div>
+    <div class="panel">
+      <div class="label">Market data connection</div>
+      <div class="value" id="connection">Connecting...</div>
+      <div class="note" id="lastUpdate">Last update: --</div>
+    </div>
+    <div class="panel">
+      <div class="label">Execution status</div>
+      <div class="value" style="color:var(--green)">LOCKED</div>
+      <div class="note">No order execution code installed</div>
+    </div>
+  </div>
+
+  <div class="panel section">
+    <h2>System information</h2>
+    <div class="note" id="systemMessage">
+      Initializing public market data...
+    </div>
+    <p class="note">
+      Prices and charts are informational. Signals and returns are not
+      guaranteed. This prototype does not place orders.
+    </p>
+  </div>
+</main>
+
+<footer class="note">
+  MuB Crypto Intelligence · Built for mobile monitoring
+</footer>
+
+<script>
+const API = "https://data-api.binance.vision/api/v3";
+const symbols = ["BTCUSDT", "ETHUSDT"];
+let activeSymbol = "BTCUSDT";
+let chart = null;
+let candleSeries = null;
+let busy = false;
+let lastCandleFetch = 0;
+
+const $ = id => document.getElementById(id);
+
+function money(value) {
+  return Number(value).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function setChange(id, value) {
+  const el = $(id);
+  const n = Number(value);
+  el.textContent = "24h change: " +
+    (n > 0 ? "+" : "") + n.toFixed(2) + "%";
+  el.className = "change " +
+    (n > 0 ? "positive" : n < 0 ? "negative" : "");
+}
+
+function createChart() {
+  const container = $("chart");
+  if (!window.LightweightCharts) {
+    $("chartStatus").textContent =
+      "Chart library did not load. Check your connection.";
+    return;
+  }
+
+  chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: container.clientHeight,
+    layout: {
+      background: { color: "#141c30" },
+      textColor: "#b9c7df"
+    },
+    grid: {
+      vertLines: { color: "#202b40" },
+      horzLines: { color: "#202b40" }
+    },
+    rightPriceScale: { borderColor: "#28334b" },
+    timeScale: {
+      borderColor: "#28334b",
+      timeVisible: true,
+      secondsVisible: false
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal
+    }
+  });
+
+  candleSeries = chart.addCandlestickSeries({
+    upColor: "#30d6a0",
+    downColor: "#ff687d",
+    borderUpColor: "#30d6a0",
+    borderDownColor: "#ff687d",
+    wickUpColor: "#30d6a0",
+    wickDownColor: "#ff687d"
+  });
+
+  window.addEventListener("resize", () => {
+    if (chart) {
+      chart.applyOptions({
+        width: container.clientWidth,
+        height: container.clientHeight
+      });
+    }
+  });
+}
+
+async function getJSON(url) {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Market API returned HTTP " + response.status);
+  }
+  return response.json();
+}
+
+async function refreshPrices() {
+  const results = await Promise.all(
+    symbols.map(async symbol => {
+      const data = await getJSON(
+        API + "/ticker/24hr?symbol=" + symbol
+      );
+      return { symbol, data };
+    })
+  );
+
+  for (const item of results) {
+    const isBTC = item.symbol === "BTCUSDT";
+    const prefix = isBTC ? "btc" : "eth";
+    $(prefix + "Price").textContent =
+      "$" + money(item.data.lastPrice);
+    setChange(prefix + "Change", item.data.priceChangePercent);
+  }
+}
+
+async function refreshCandles() {
+  const data = await getJSON(
+    API + "/klines?symbol=" + activeSymbol +
+    "&interval=5m&limit=100"
+  );
+
+  const candles = data.map(k => ({
+    time: Math.floor(Number(k[0]) / 1000),
+    open: Number(k[1]),
+    high: Number(k[2]),
+    low: Number(k[3]),
+    close: Number(k[4])
+  }));
+
+  if (candleSeries) {
+    candleSeries.setData(candles);
+    chart.timeScale().fitContent();
+  }
+
+  lastCandleFetch = Date.now();
+  $("chartStatus").textContent =
+    activeSymbol + " · 5m · " + candles.length +
+    " candles · Updated " + new Date().toLocaleTimeString();
+}
+
+async function refreshAll() {
+  if (busy) return;
+  busy = true;
+  $("connection").textContent = "Updating...";
+  $("systemMessage").textContent = "Fetching public market data...";
+
+  try {
+    await Promise.all([refreshPrices(), refreshCandles()]);
+    $("connection").textContent = "CONNECTED";
+    $("connection").style.color = "var(--green)";
+    $("lastUpdate").textContent =
+      "Last update: " + new Date().toLocaleTimeString();
+    $("systemMessage").textContent =
+      "Market data loaded. Automatic refresh is active. " +
+      "Signal engine and paper trade execution are not yet enabled.";
+  } catch (error) {
+    $("connection").textContent = "ERROR";
+    $("connection").style.color = "var(--red)";
+    $("systemMessage").textContent =
+      error.message + ". Check connectivity and try Refresh now.";
+    $("chartStatus").textContent =
+      "Could not update candles. Previous chart may be stale.";
+  } finally {
+    busy = false;
+  }
+}
+
+function selectSymbol(symbol) {
+  activeSymbol = symbol;
+  $("btcButton").classList.toggle("active", symbol === "BTCUSDT");
+  $("ethButton").classList.toggle("active", symbol === "ETHUSDT");
+  refreshCandles().catch(error => {
+    $("chartStatus").textContent = error.message;
+  });
+}
+
+createChart();
+refreshAll();
+
+// Prices refresh every 15 seconds; candles refresh every 30 seconds.
+// The signal scanner will have its own five-minute schedule in a later phase.
+setInterval(() => {
+  refreshPrices().then(() => {
+    $("lastUpdate").textContent =
+      "Last update: " + new Date().toLocaleTimeString();
+    $("connection").textContent = "CONNECTED";
+    $("connection").style.color = "var(--green)";
+  }).catch(error => {
+    $("connection").textContent = "ERROR";
+    $("connection").style.color = "var(--red)";
+    $("systemMessage").textContent = error.message;
+  });
+}, 15000);
+
+setInterval(() => {
+  if (Date.now() - lastCandleFetch >= 25000) {
+    refreshCandles().catch(error => {
+      $("chartStatus").textContent = error.message;
+    });
+  }
+}, 30000);
+</script>
+</body>
+</html>
