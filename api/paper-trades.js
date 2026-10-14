@@ -271,28 +271,49 @@ redis.call("SET", key, cjson.encode(s))
 return cjson.encode(s)
 `;
 
-  async function redisCommand(command) {
-    const response = await fetch(dbUrl.replace(/\/+$/, ""), {
+  
+async function redisCommand(command) {
+  const response = await fetch(
+    dbUrl.replace(/\/+$/, ""),
+    {
       method: "POST",
       headers: {
         Authorization: "Bearer " + dbToken,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(command)
-    });
-
-    if (!response.ok) {
-      throw new Error("Database request failed: " + response.status);
     }
+  );
 
-    const result = await response.json();
+  const raw = await response.text();
 
-    if (result.error) {
-      throw new Error("Database command failed");
-    }
-
-    return result.result;
+  if (!response.ok) {
+    console.error(
+      "Upstash HTTP error:",
+      response.status,
+      raw.slice(0, 500)
+    );
+    throw new Error(
+      "Upstash HTTP error: " + response.status
+    );
   }
+
+  let result;
+
+  try {
+    result = JSON.parse(raw);
+  } catch {
+    console.error("Invalid Upstash response:", raw.slice(0, 500));
+    throw new Error("Invalid database response");
+  }
+
+  if (result.error) {
+    console.error("Upstash command error:", result.error);
+    throw new Error("Database command failed");
+  }
+
+  return result.result;
+}
 
   try {
     let price = null;
