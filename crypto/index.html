@@ -6,138 +6,77 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b1020">
 <title>MuB Crypto Intelligence</title>
-
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-
 <style>
 :root {
-  color-scheme: dark;
-  --bg:#0b1020;
-  --panel:#141c30;
-  --border:#28334b;
-  --text:#edf2ff;
-  --muted:#9aa8c3;
-  --green:#30d6a0;
-  --red:#ff687d;
-  --blue:#85aaff;
+  color-scheme:dark;
+  --bg:#0b1020;--panel:#141c30;--border:#28334b;
+  --text:#edf2ff;--muted:#9aa8c3;
+  --green:#30d6a0;--red:#ff687d;--blue:#85aaff;
 }
-* { box-sizing:border-box; }
-body {
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
-  font-family:system-ui,Arial,sans-serif;
-}
-header {
-  padding:20px 16px;
-  border-bottom:1px solid var(--border);
-}
-.brand { font-size:22px;font-weight:800; }
-.sub { color:var(--muted);font-size:12px;margin-top:5px; }
-main { max-width:1050px;margin:auto;padding:14px; }
-.panel {
-  min-width:0;
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:14px;
-}
-.grid {
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:10px;
-}
-.label { color:var(--muted);font-size:12px; }
-.price {
-  font-size:clamp(21px,5vw,29px);
-  font-weight:800;
-  margin:9px 0;
-  overflow-wrap:anywhere;
-}
-.change { font-size:12px; }
-.positive { color:var(--green); }
-.negative { color:var(--red); }
-.section { margin-top:13px; }
-h2 { font-size:16px;margin:0 0 13px; }
-.controls {
-  display:flex;
-  flex-wrap:wrap;
-  gap:7px;
-}
-button {
-  border:1px solid var(--border);
-  border-radius:8px;
-  padding:9px 11px;
-  background:#1b2740;
-  color:var(--text);
-  font-size:12px;
-  font-weight:700;
-  cursor:pointer;
-}
-button.active {
-  background:#304c80;
-  border-color:var(--blue);
-}
-button:disabled { opacity:.5; }
-#chart { width:100%;height:340px;margin-top:12px; }
-.stats {
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:10px;
-}
-.value { font-size:18px;font-weight:750;margin-top:8px; }
-.note { color:var(--muted);font-size:12px;line-height:1.6; }
-.banner {
-  padding:12px;
-  border:1px solid #236d5a;
-  background:#102c2a;
-  color:#70efc4;
-  border-radius:10px;
-  font-size:12px;
-  font-weight:800;
-  margin-bottom:13px;
-}
-footer {
-  padding:20px 12px;
-  text-align:center;
-}
-@media(max-width:480px) {
-  main { padding:10px; }
-  .panel { padding:11px; }
-  #chart { height:290px; }
-  .value { font-size:16px; }
-  button { padding:9px 10px; }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+font-family:system-ui,Arial,sans-serif}
+header{padding:18px 15px;border-bottom:1px solid var(--border)}
+.brand{font-size:22px;font-weight:800}
+.sub{font-size:12px;color:var(--muted);margin-top:4px}
+main{max-width:1050px;margin:auto;padding:14px}
+.panel{min-width:0;background:var(--panel);border:1px solid var(--border);
+border-radius:13px;padding:14px}
+.grid,.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.label{font-size:12px;color:var(--muted)}
+.price{font-size:clamp(21px,5vw,29px);font-weight:800;margin:9px 0;overflow-wrap:anywhere}
+.change,.note{font-size:12px}
+.note{color:var(--muted);line-height:1.65;overflow-wrap:anywhere}
+.positive{color:var(--green)}.negative{color:var(--red)}
+.section{margin-top:12px}
+h2{font-size:16px;margin:0 0 12px}
+.controls{display:flex;flex-wrap:wrap;gap:7px}
+button{border:1px solid var(--border);border-radius:8px;padding:9px 10px;
+background:#1b2740;color:var(--text);font-size:12px;font-weight:700}
+button.active{background:#304c80;border-color:var(--blue)}
+button:disabled{opacity:.5}
+#chart{height:330px;width:100%;margin-top:12px}
+.value{font-size:18px;font-weight:750;margin-top:8px;overflow-wrap:anywhere}
+.banner{padding:11px;border:1px solid #236d5a;background:#102c2a;
+color:#70efc4;border-radius:10px;font-size:12px;font-weight:750;margin-bottom:12px}
+footer{text-align:center;padding:20px 12px}
+@media(max-width:480px){
+ main{padding:10px}.panel{padding:11px}#chart{height:290px}
+ .value{font-size:16px}button{padding:9px}
 }
 </style>
 </head>
-
 <body>
 <header>
   <div class="brand">MuB Crypto Intelligence</div>
-  <div class="sub">Live market monitor · Paper trading</div>
+  <div class="sub">Live market monitor · Signal engine · Paper trading</div>
 </header>
 
 <main>
-  <div class="banner">
-    PAPER MODE ACTIVE · REAL TRADING DISABLED
+  <div class="banner">PAPER MODE ACTIVE · REAL ORDER EXECUTION DISABLED</div>
+
+  <div class="controls section">
+    <button class="active" id="btcButton">BTC / USDT</button>
+    <button id="ethButton">ETH / USDT</button>
+    <button id="refreshButton">Refresh now</button>
   </div>
 
-  <div class="grid">
+  <div class="grid section">
     <div class="panel">
-      <div class="label">BTC / USDT · LIVE PRICE</div>
-      <div class="price" id="btcPrice">Connecting...</div>
-      <div class="change" id="btcChange">24h change: --</div>
+      <div class="label" id="priceLabel">BTC / USDT · LIVE PRICE</div>
+      <div class="price" id="livePrice">Connecting...</div>
+      <div class="change" id="priceChange">24h change: --</div>
     </div>
     <div class="panel">
-      <div class="label">LIVE FEED</div>
-      <div class="value" id="connection">Connecting...</div>
-      <div class="note" id="lastUpdate">Last update: --</div>
+      <div class="label">Market connection</div>
+      <div class="value" id="connection">CONNECTING</div>
+      <div class="note" id="lastUpdate">Waiting for market data...</div>
     </div>
   </div>
 
   <div class="panel section">
-    <h2>BTC / USDT · <span id="timeframeLabel">5m</span></h2>
-
+    <h2 id="chartTitle">BTC / USDT · 5m</h2>
     <div class="controls" id="timeframes">
       <button data-tf="5s">5s</button>
       <button data-tf="15s">15s</button>
@@ -152,120 +91,120 @@ footer {
       <button data-tf="1d">1D</button>
       <button data-tf="1w">1W</button>
     </div>
-
     <div id="chart"></div>
-    <div class="note" id="chartStatus">Loading historical candles...</div>
-    <div class="note">
-      Seconds candles are constructed from live trades.
-      Historical seconds data is limited to recent exchange trades.
-    </div>
+    <div class="note" id="chartStatus">Loading chart...</div>
+    <div class="note">Seconds candles are aggregated from actual trades.
+    Recent seconds history is limited by the exchange trade-history endpoint.</div>
   </div>
 
   <div class="stats section">
     <div class="panel">
-      <div class="label">Paper balance</div>
+      <div class="label">Paper account balance</div>
       <div class="value">$10,000.00</div>
-      <div class="note">Demo display only · No funds</div>
+      <div class="note">Demo display only · No real funds</div>
     </div>
     <div class="panel">
-      <div class="label">Signal engine</div>
-      <div class="value" style="color:var(--blue)">WAIT</div>
-      <div class="note">Not yet implemented</div>
+      <div class="label">Signal engine · 5m</div>
+      <div class="value" id="signalValue">LOADING...</div>
+      <div class="note" id="signalScore">Connecting to signal API...</div>
+      <div class="note" id="signalUpdated"></div>
     </div>
     <div class="panel">
-      <div class="label">Chart connection</div>
-      <div class="value" id="chartConnection">Connecting...</div>
-      <div class="note">Automatic reconnect enabled</div>
+      <div class="label">Indicator readings</div>
+      <div class="note" id="indicators">Waiting for analysis...</div>
+    </div>
+    <div class="panel">
+      <div class="label">Signal explanation</div>
+      <div class="note" id="signalReasons">Waiting for analysis...</div>
+    </div>
+    <div class="panel">
+      <div class="label">Signal API status</div>
+      <div class="value" id="signalConnection">CONNECTING</div>
+      <div class="note">Refreshes every five minutes</div>
     </div>
     <div class="panel">
       <div class="label">Order execution</div>
-      <div class="value" style="color:var(--green)">LOCKED</div>
-      <div class="note">No order execution implemented</div>
+      <div class="value positive">LOCKED</div>
+      <div class="note">No live order functionality</div>
     </div>
   </div>
 
   <div class="panel section">
-    <h2>System log</h2>
-    <div id="systemMessage" class="note">
-      Connecting to public market data...
+    <h2>System information</h2>
+    <div class="note" id="systemMessage">
+      Initializing public market data and signal engine...
+    </div>
+    <div class="note" style="margin-top:8px">
+      Signals are experimental and are not guaranteed to be profitable.
+      Paper balance is illustrative; persistent paper-trade accounting
+      has not yet been implemented.
     </div>
   </div>
 </main>
 
-<footer class="note">
-  MuB Crypto Intelligence · Public market data · Paper mode
-</footer>
+<footer class="note">MuB Crypto Intelligence · Paper mode · No real orders</footer>
 
 <script>
 "use strict";
 
 const API = "https://data-api.binance.vision/api/v3";
 const WS = "wss://stream.binance.com:9443/ws/";
-const SYMBOL = "BTCUSDT";
+
+let symbol = "BTCUSDT";
+let timeframe = "5m";
+let chart, candleSeries, volumeSeries;
+let marketSocket = null;
+let priceSocket = null;
+let marketGeneration = 0;
+let priceGeneration = 0;
+let marketTimer = null;
+let priceTimer = null;
+let marketDelay = 2000;
+let priceDelay = 2000;
+let currentCustom = null;
+let customMs = 0;
+let lastVolumeTime = 0;
+let changing = false;
+let refreshingSignal = false;
 
 const $ = id => document.getElementById(id);
 
-let chart = null;
-let candlesSeries = null;
-let volumeSeries = null;
-
-let activeInterval = "5m";
-let chartSocket = null;
-let priceSocket = null;
-let chartGeneration = 0;
-let priceGeneration = 0;
-
-let chartReconnectTimer = null;
-let priceReconnectTimer = null;
-let reconnectDelay = 2000;
-let priceReconnectDelay = 2000;
-
-let customIntervalMs = 0;
-let currentCustomCandle = null;
-let busy = false;
-let lastPrice = null;
-let lastChartUpdate = 0;
-let lastVolumeTime = 0;
-
-function intervalMs(tf) {
-  const custom = {"5s":5000,"15s":15000,"30s":30000};
-  if (custom[tf]) return custom[tf];
-
-  const m = tf.match(/^(\d+)(m|h|d|w)$/);
-  if (!m) throw new Error("Unsupported timeframe: " + tf);
-
-  return Number(m[1]) *
-    ({m:60000,h:3600000,d:86400000,w:604800000})[m[2]];
+function symbolLabel(s) {
+  return s === "BTCUSDT" ? "BTC / USDT" : "ETH / USDT";
 }
 
-function formatPrice(v) {
-  return Number(v).toLocaleString("en-US", {
-    minimumFractionDigits:2,
-    maximumFractionDigits:2
+function money(n) {
+  return Number(n).toLocaleString("en-US", {
+    minimumFractionDigits:2,maximumFractionDigits:2
   });
 }
 
-function setStatus(id, text, good) {
+function setStatus(id,text,good) {
   $(id).textContent = text;
   $(id).style.color = good ? "var(--green)" : "var(--red)";
 }
 
+function intervalMs(tf) {
+  const seconds = {"5s":5000,"15s":15000,"30s":30000};
+  if(seconds[tf]) return seconds[tf];
+  const m = tf.match(/^(\d+)(m|h|d|w)$/);
+  if(!m) throw new Error("Unsupported timeframe");
+  return Number(m[1]) *
+    ({m:60000,h:3600000,d:86400000,w:604800000})[m[2]];
+}
+
 async function getJSON(url) {
-  const response = await fetch(url, {cache:"no-store"});
-  if (!response.ok) {
-    throw new Error("HTTP " + response.status);
-  }
-  return response.json();
+  const r = await fetch(url,{cache:"no-store"});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
 }
 
 function createChart() {
-  const el = $("chart");
-
-  if (!window.LightweightCharts) {
-    throw new Error("Chart library failed to load");
+  if(!window.LightweightCharts) {
+    throw new Error("Chart library did not load. Check internet.");
   }
-
-  chart = LightweightCharts.createChart(el, {
+  const el = $("chart");
+  chart = LightweightCharts.createChart(el,{
     width:el.clientWidth,
     height:el.clientHeight,
     layout:{
@@ -282,12 +221,10 @@ function createChart() {
       timeVisible:true,
       secondsVisible:true
     },
-    crosshair:{
-      mode:LightweightCharts.CrosshairMode.Normal
-    }
+    crosshair:{mode:LightweightCharts.CrosshairMode.Normal}
   });
 
-  candlesSeries = chart.addCandlestickSeries({
+  candleSeries = chart.addCandlestickSeries({
     upColor:"#30d6a0",
     downColor:"#ff687d",
     borderUpColor:"#30d6a0",
@@ -307,426 +244,381 @@ function createChart() {
     borderVisible:false
   });
 
-  window.addEventListener("resize", () => {
-    if (chart) {
-      chart.applyOptions({
-        width:el.clientWidth,
-        height:el.clientHeight
-      });
-    }
+  window.addEventListener("resize",()=>{
+    if(chart) chart.applyOptions({
+      width:el.clientWidth,height:el.clientHeight
+    });
   });
 }
 
-function volumeBar(time, value, rising) {
+function volumeBar(time,volume,rising) {
   return {
-    time,
-    value,
+    time,value:volume,
     color:rising ? "rgba(48,214,160,0.45)"
-                 : "rgba(255,104,125,0.45)"
+                  : "rgba(255,104,125,0.45)"
   };
 }
 
-function stopChartSocket() {
-  chartGeneration++;
-  clearTimeout(chartReconnectTimer);
-  chartReconnectTimer = null;
-
-  if (chartSocket) {
-    const old = chartSocket;
-    chartSocket = null;
-    old.onopen = null;
-    old.onmessage = null;
-    old.onerror = null;
-    old.onclose = null;
-    try { old.close(); } catch (_) {}
+function stopMarketSocket() {
+  marketGeneration++;
+  clearTimeout(marketTimer);
+  marketTimer = null;
+  if(marketSocket) {
+    const old=marketSocket;
+    marketSocket=null;
+    old.onopen=old.onmessage=old.onerror=old.onclose=null;
+    try{old.close()}catch(_){}
   }
 }
 
 function stopPriceSocket() {
   priceGeneration++;
-  clearTimeout(priceReconnectTimer);
-  priceReconnectTimer = null;
-
-  if (priceSocket) {
-    const old = priceSocket;
-    priceSocket = null;
-    old.onopen = null;
-    old.onmessage = null;
-    old.onerror = null;
-    old.onclose = null;
-    try { old.close(); } catch (_) {}
+  clearTimeout(priceTimer);
+  priceTimer=null;
+  if(priceSocket) {
+    const old=priceSocket;
+    priceSocket=null;
+    old.onopen=old.onmessage=old.onerror=old.onclose=null;
+    try{old.close()}catch(_){}
   }
-}
-
-function resetChartData(candles, volumes) {
-  candlesSeries.setData(candles);
-  volumeSeries.setData(volumes);
-  chart.timeScale().fitContent();
-
-  lastVolumeTime = volumes.length
-    ? volumes[volumes.length - 1].time : 0;
-
-  lastChartUpdate = Date.now();
 }
 
 async function loadHistory() {
-  customIntervalMs =
-    ["5s","15s","30s"].includes(activeInterval)
-      ? intervalMs(activeInterval) : 0;
+  customMs = ["5s","15s","30s"].includes(timeframe)
+    ? intervalMs(timeframe) : 0;
 
-  $("timeframeLabel").textContent = activeInterval;
-  $("chartStatus").textContent = "Loading history...";
+  $("chartTitle").textContent=symbolLabel(symbol)+" · "+timeframe;
+  $("chartStatus").textContent="Loading historical candles...";
 
-  let candles = [];
-  let volumes = [];
+  let candles=[],volumes=[];
 
-  if (customIntervalMs) {
-    // Aggregate recent actual exchange aggregate trades.
-    const trades = await getJSON(
-      API + "/aggTrades?symbol=" + SYMBOL + "&limit=1000"
+  if(customMs) {
+    const trades=await getJSON(
+      API+"/aggTrades?symbol="+symbol+"&limit=1000"
     );
+    const map=new Map();
 
-    const map = new Map();
+    for(const t of trades) {
+      const time=Math.floor(Number(t.T)/customMs)*customMs/1000;
+      const price=Number(t.p),qty=Number(t.q);
+      let c=map.get(time);
 
-    for (const t of trades) {
-      const time = Math.floor(Number(t.T) / customIntervalMs)
-        * customIntervalMs / 1000;
-      const price = Number(t.p);
-      const qty = Number(t.q);
-
-      let c = map.get(time);
-
-      if (!c) {
-        c = {
-          time, open:price, high:price, low:price,
-          close:price, volume:0
-        };
+      if(!c) {
+        c={time,open:price,high:price,low:price,close:price,volume:0};
         map.set(time,c);
       }
-
-      c.high = Math.max(c.high,price);
-      c.low = Math.min(c.low,price);
-      c.close = price;
-      c.volume += qty;
+      c.high=Math.max(c.high,price);
+      c.low=Math.min(c.low,price);
+      c.close=price;
+      c.volume+=qty;
     }
 
-    const all = Array.from(map.values())
-      .sort((a,b) => a.time-b.time);
-
-    candles = all.map(c => ({
-      time:c.time,
-      open:c.open,
-      high:c.high,
-      low:c.low,
-      close:c.close
+    const all=[...map.values()].sort((a,b)=>a.time-b.time);
+    candles=all.map(c=>({
+      time:c.time,open:c.open,high:c.high,low:c.low,close:c.close
     }));
-
-    volumes = all.map(c =>
-      volumeBar(c.time,c.volume,c.close >= c.open)
-    );
-
-    const latest = all[all.length-1];
-
-    currentCustomCandle = latest ? {...latest} : null;
-
+    volumes=all.map(c=>volumeBar(c.time,c.volume,c.close>=c.open));
+    currentCustom=all.length ? {...all[all.length-1]} : null;
   } else {
-    const rows = await getJSON(
-      API + "/klines?symbol=" + SYMBOL +
-      "&interval=" + activeInterval + "&limit=200"
+    const rows=await getJSON(
+      API+"/klines?symbol="+symbol+
+      "&interval="+timeframe+"&limit=200"
     );
-
-    candles = rows.map(k => ({
+    candles=rows.map(k=>({
       time:Math.floor(Number(k[0])/1000),
-      open:Number(k[1]),
-      high:Number(k[2]),
-      low:Number(k[3]),
-      close:Number(k[4])
+      open:Number(k[1]),high:Number(k[2]),
+      low:Number(k[3]),close:Number(k[4])
     }));
-
-    volumes = rows.map(k => {
-      const open = Number(k[1]);
-      const close = Number(k[4]);
-      return volumeBar(
-        Math.floor(Number(k[0])/1000),
-        Number(k[5]),
-        close >= open
-      );
-    });
-
-    currentCustomCandle = null;
+    volumes=rows.map(k=>volumeBar(
+      Math.floor(Number(k[0])/1000),Number(k[5]),
+      Number(k[4])>=Number(k[1])
+    ));
+    currentCustom=null;
   }
 
-  if (!candles.length) {
-    throw new Error("No historical candles returned");
-  }
-
-  resetChartData(candles,volumes);
-
-  $("chartStatus").textContent =
-    activeInterval + " · " + candles.length +
-    " historical candles loaded";
+  if(!candles.length) throw new Error("No candles returned");
+  candleSeries.setData(candles);
+  volumeSeries.setData(volumes);
+  chart.timeScale().fitContent();
+  lastVolumeTime=volumes.length ? volumes[volumes.length-1].time : 0;
+  $("chartStatus").textContent=timeframe+" · "+candles.length+
+    " candles loaded · Waiting for live updates";
 }
 
-function updateVolume(time, value, rising) {
-  if (time < lastVolumeTime) return;
-
-  volumeSeries.update(volumeBar(time,value,rising));
-  lastVolumeTime = time;
+function updateVolume(time,volume,rising) {
+  if(time<lastVolumeTime) return;
+  volumeSeries.update(volumeBar(time,volume,rising));
+  lastVolumeTime=time;
 }
 
-function handleCustomTrade(msg) {
-  const tradeTime = Number(msg.T);
-  const price = Number(msg.p);
-  const quantity = Number(msg.q);
+function handleTrade(msg) {
+  const price=Number(msg.p),qty=Number(msg.q);
+  if(!Number.isFinite(price)||!Number.isFinite(qty)) return;
 
-  if (!Number.isFinite(price) || !Number.isFinite(quantity)) return;
+  const time=Math.floor(Number(msg.T)/customMs)*customMs/1000;
 
-  const bucket = Math.floor(tradeTime/customIntervalMs)
-    * customIntervalMs/1000;
+  if(currentCustom && time<currentCustom.time) return;
 
-  if (currentCustomCandle &&
-      bucket < currentCustomCandle.time) {
-    return;
-  }
-
-  if (!currentCustomCandle ||
-      bucket > currentCustomCandle.time) {
-    currentCustomCandle = {
-      time:bucket,
-      open:price,
-      high:price,
-      low:price,
-      close:price,
-      volume:quantity
-    };
+  if(!currentCustom || time>currentCustom.time) {
+    currentCustom={time,open:price,high:price,low:price,
+      close:price,volume:qty};
   } else {
-    currentCustomCandle.high =
-      Math.max(currentCustomCandle.high,price);
-    currentCustomCandle.low =
-      Math.min(currentCustomCandle.low,price);
-    currentCustomCandle.close = price;
-    currentCustomCandle.volume += quantity;
+    currentCustom.high=Math.max(currentCustom.high,price);
+    currentCustom.low=Math.min(currentCustom.low,price);
+    currentCustom.close=price;
+    currentCustom.volume+=qty;
   }
 
-  const c = currentCustomCandle;
-
-  candlesSeries.update({
-    time:c.time,
-    open:c.open,
-    high:c.high,
-    low:c.low,
-    close:c.close
+  const c=currentCustom;
+  candleSeries.update({
+    time:c.time,open:c.open,high:c.high,low:c.low,close:c.close
   });
-
-  updateVolume(c.time,c.volume,c.close >= c.open);
-
-  $("chartStatus").textContent =
-    activeInterval + " · LIVE trades · " +
+  updateVolume(c.time,c.volume,c.close>=c.open);
+  $("chartStatus").textContent=timeframe+" · LIVE trades · "+
     new Date().toLocaleTimeString();
-  lastChartUpdate = Date.now();
 }
 
 function handleKline(msg) {
-  const k = msg.k;
-  if (!k) return;
-
-  const c = {
+  const k=msg.k;
+  if(!k) return;
+  const c={
     time:Math.floor(Number(k.t)/1000),
-    open:Number(k.o),
-    high:Number(k.h),
-    low:Number(k.l),
-    close:Number(k.c)
+    open:Number(k.o),high:Number(k.h),
+    low:Number(k.l),close:Number(k.c)
   };
-
-  candlesSeries.update(c);
-
-  updateVolume(
-    c.time,
-    Number(k.v),
-    c.close >= c.open
-  );
-
-  $("chartStatus").textContent =
-    activeInterval + " · " +
-    (k.x ? "CANDLE CLOSED" : "LIVE CANDLE") +
-    " · " + new Date().toLocaleTimeString();
-
-  lastChartUpdate = Date.now();
+  candleSeries.update(c);
+  updateVolume(c.time,Number(k.v),c.close>=c.open);
+  $("chartStatus").textContent=timeframe+" · "+
+    (k.x?"CANDLE CLOSED":"LIVE CANDLE")+" · "+
+    new Date().toLocaleTimeString();
 }
 
-function connectChartSocket() {
-  const generation = ++chartGeneration;
+function connectMarketSocket() {
+  const generation=++marketGeneration;
+  const stream=customMs
+    ? symbol.toLowerCase()+"@aggTrade"
+    : symbol.toLowerCase()+"@kline_"+timeframe;
+  const ws=new WebSocket(WS+stream);
+  marketSocket=ws;
+  setStatus("chartStatus","Connecting to live chart...",false);
 
-  const custom = customIntervalMs > 0;
-  const stream = custom
-    ? "btcusdt@aggTrade"
-    : "btcusdt@kline_" + activeInterval;
-
-  const ws = new WebSocket(WS + stream);
-  chartSocket = ws;
-
-  setStatus("chartConnection","Connecting...",false);
-
-  ws.onopen = () => {
-    if (generation !== chartGeneration) return;
-    reconnectDelay = 2000;
-    setStatus("chartConnection","LIVE",true);
+  ws.onopen=()=>{
+    if(generation!==marketGeneration) return;
+    marketDelay=2000;
+    setStatus("connection","LIVE",true);
+    $("lastUpdate").textContent="Live market stream connected";
   };
 
-  ws.onmessage = event => {
-    if (generation !== chartGeneration) return;
-
+  ws.onmessage=event=>{
+    if(generation!==marketGeneration) return;
     try {
-      const msg = JSON.parse(event.data);
-      if (custom) handleCustomTrade(msg);
+      const msg=JSON.parse(event.data);
+      if(customMs) handleTrade(msg);
       else handleKline(msg);
-    } catch (error) {
-      $("systemMessage").textContent =
-        "Chart message error: " + error.message;
+    } catch(e) {
+      $("systemMessage").textContent="Chart error: "+e.message;
     }
   };
 
-  ws.onerror = () => {
-    if (generation === chartGeneration) {
-      setStatus("chartConnection","Connection issue",false);
-    }
+  ws.onerror=()=>{
+    if(generation===marketGeneration)
+      setStatus("connection","CONNECTION ISSUE",false);
   };
 
-  ws.onclose = () => {
-    if (generation !== chartGeneration) return;
-
-    setStatus("chartConnection","Reconnecting...",false);
-
-    chartReconnectTimer = setTimeout(async () => {
-      if (generation !== chartGeneration) return;
-
-      try {
-        // Reload recent history after a disconnect to reduce gaps.
-        await loadHistory();
-        if (generation !== chartGeneration) return;
-        connectChartSocket();
-      } catch (_) {
-        connectChartSocket();
-      }
-    },reconnectDelay);
-
-    reconnectDelay = Math.min(reconnectDelay*2,30000);
+  ws.onclose=()=>{
+    if(generation!==marketGeneration) return;
+    setStatus("connection","RECONNECTING",false);
+    marketTimer=setTimeout(async()=>{
+      if(generation!==marketGeneration) return;
+      try { await loadHistory(); } catch(_) {}
+      if(generation===marketGeneration) connectMarketSocket();
+    },marketDelay);
+    marketDelay=Math.min(marketDelay*2,30000);
   };
 }
 
-async function changeTimeframe(tf) {
-  if (busy || tf === activeInterval) return;
-  busy = true;
-  activeInterval = tf;
+async function connectPriceSocket() {
+  const generation=++priceGeneration;
+  const ws=new WebSocket(WS+symbol.toLowerCase()+"@trade");
+  priceSocket=ws;
+  setStatus("connection","CONNECTING",false);
 
-  document.querySelectorAll("#timeframes button")
-    .forEach(b => b.classList.toggle("active",b.dataset.tf===tf));
+  ws.onopen=()=>{
+    if(generation!==priceGeneration) return;
+    priceDelay=2000;
+    setStatus("connection","LIVE",true);
+  };
 
-  stopChartSocket();
-  $("chartStatus").textContent = "Changing timeframe...";
+  ws.onmessage=event=>{
+    if(generation!==priceGeneration) return;
+    try {
+      const d=JSON.parse(event.data);
+      $("livePrice").textContent="$"+money(Number(d.p));
+      $("lastUpdate").textContent="Last trade: "+
+        new Date(Number(d.T)).toLocaleTimeString();
+    } catch(_) {}
+  };
+
+  ws.onerror=()=>{
+    if(generation===priceGeneration)
+      setStatus("connection","PRICE FEED ISSUE",false);
+  };
+
+  ws.onclose=()=>{
+    if(generation!==priceGeneration) return;
+    setStatus("connection","RECONNECTING",false);
+    priceTimer=setTimeout(connectPriceSocket,priceDelay);
+    priceDelay=Math.min(priceDelay*2,30000);
+  };
+}
+
+async function refresh24h() {
+  const d=await getJSON(API+"/ticker/24hr?symbol="+symbol);
+  const n=Number(d.priceChangePercent);
+  $("priceChange").textContent="24h change: "+(n>0?"+":"")+
+    n.toFixed(2)+"%";
+  $("priceChange").className="change "+
+    (n>0?"positive":n<0?"negative":"");
+}
+
+async function refreshSignal() {
+  if(refreshingSignal) return;
+  refreshingSignal=true;
+  setStatus("signalConnection","CHECKING",false);
 
   try {
-    await loadHistory();
-    connectChartSocket();
-  } catch (error) {
-    $("chartStatus").textContent =
-      "Could not load candles: " + error.message;
+    const response=await fetch(
+      "/api/crypto-signal?symbol="+symbol,
+      {cache:"no-store"}
+    );
+    if(!response.ok) throw new Error("Signal API HTTP "+response.status);
+    const data=await response.json();
+
+    if(!["BUY","SELL","WAIT"].includes(data.signal))
+      throw new Error("Unexpected signal response");
+
+    $("signalValue").textContent=data.signal;
+    $("signalValue").style.color=
+      data.signal==="BUY"?"var(--green)":
+      data.signal==="SELL"?"var(--red)":"var(--blue)";
+
+    $("signalScore").textContent="Score: "+data.score+
+      " · "+data.candlesUsed+" completed candles";
+
+    $("signalUpdated").textContent="Updated: "+
+      new Date(data.generatedAt).toLocaleTimeString();
+
+    const i=data.indicators||{};
+    $("indicators").textContent=
+      "EMA20: "+Number(i.ema20).toFixed(2)+
+      " · EMA50: "+Number(i.ema50).toFixed(2)+
+      " · RSI14: "+Number(i.rsi14).toFixed(2)+
+      " · MACD: "+Number(i.macd).toFixed(3)+
+      " · Signal: "+Number(i.macdSignal).toFixed(3)+
+      " · ATR14: "+Number(i.atr14).toFixed(2);
+
+    $("signalReasons").textContent=(data.reasons||[]).join(" · ");
+    setStatus("signalConnection","CONNECTED",true);
+  } catch(e) {
+    $("signalValue").textContent="UNAVAILABLE";
+    $("signalValue").style.color="var(--red)";
+    $("signalScore").textContent=e.message;
+    $("indicators").textContent="No current indicator readings.";
+    $("signalReasons").textContent="Check that the signal API is deployed.";
+    setStatus("signalConnection","ERROR",false);
   } finally {
-    busy = false;
+    refreshingSignal=false;
   }
 }
 
-document.querySelectorAll("#timeframes button")
-  .forEach(button => {
-    button.addEventListener("click",() =>
-      changeTimeframe(button.dataset.tf)
-    );
+async function refreshAll() {
+  $("refreshButton").disabled=true;
+  try {
+    await Promise.all([refresh24h(),refreshSignal()]);
+    $("systemMessage").textContent=
+      "Public market data and signal refresh completed. "+
+      "Paper mode active; no real orders can be placed.";
+  } catch(e) {
+    $("systemMessage").textContent="Refresh error: "+e.message;
+  } finally {
+    $("refreshButton").disabled=false;
+  }
+}
+
+async function selectSymbol(next) {
+  if(symbol===next || changing) return;
+  changing=true;
+  symbol=next;
+
+  $("btcButton").classList.toggle("active",symbol==="BTCUSDT");
+  $("ethButton").classList.toggle("active",symbol==="ETHUSDT");
+  $("priceLabel").textContent=symbolLabel(symbol)+" · LIVE PRICE";
+  $("livePrice").textContent="Connecting...";
+  $("priceChange").textContent="24h change: --";
+
+  stopMarketSocket();
+  stopPriceSocket();
+
+  try {
+    await loadHistory();
+    connectMarketSocket();
+    connectPriceSocket();
+    await refreshAll();
+  } catch(e) {
+    $("systemMessage").textContent="Symbol change failed: "+e.message;
+  } finally {
+    changing=false;
+  }
+}
+
+async function changeTimeframe(tf) {
+  if(changing || timeframe===tf) return;
+  changing=true;
+  timeframe=tf;
+
+  document.querySelectorAll("#timeframes button").forEach(b=>{
+    b.classList.toggle("active",b.dataset.tf===tf);
   });
 
-async function refresh24h() {
-  const d = await getJSON(
-    API + "/ticker/24hr?symbol=" + SYMBOL
-  );
-
-  $("btcChange").textContent =
-    "24h change: " +
-    (Number(d.priceChangePercent)>0 ? "+" : "") +
-    Number(d.priceChangePercent).toFixed(2) + "%";
-
-  $("btcChange").className =
-    "change " +
-    (Number(d.priceChangePercent)>0
-      ? "positive"
-      : Number(d.priceChangePercent)<0 ? "negative" : "");
+  stopMarketSocket();
+  try {
+    await loadHistory();
+    connectMarketSocket();
+  } catch(e) {
+    $("chartStatus").textContent="Chart error: "+e.message;
+  } finally {
+    changing=false;
+  }
 }
 
-function connectPriceSocket() {
-  const generation = ++priceGeneration;
-  const ws = new WebSocket(WS + "btcusdt@trade");
-  priceSocket = ws;
+$("btcButton").addEventListener("click",()=>selectSymbol("BTCUSDT"));
+$("ethButton").addEventListener("click",()=>selectSymbol("ETHUSDT"));
+$("refreshButton").addEventListener("click",refreshAll);
 
-  ws.onopen = () => {
-    if (generation !== priceGeneration) return;
-    priceReconnectDelay = 2000;
-    setStatus("connection","LIVE PRICE",true);
-  };
-
-  ws.onmessage = event => {
-    if (generation !== priceGeneration) return;
-
-    try {
-      const msg = JSON.parse(event.data);
-      lastPrice = Number(msg.p);
-      $("btcPrice").textContent = "$" + formatPrice(lastPrice);
-      $("lastUpdate").textContent =
-        "Last trade: " + new Date(Number(msg.T)).toLocaleTimeString();
-    } catch (_) {}
-  };
-
-  ws.onerror = () => {
-    if (generation === priceGeneration) {
-      setStatus("connection","Price feed issue",false);
-    }
-  };
-
-  ws.onclose = () => {
-    if (generation !== priceGeneration) return;
-
-    setStatus("connection","Reconnecting...",false);
-
-    priceReconnectTimer = setTimeout(
-      connectPriceSocket,priceReconnectDelay
-    );
-
-    priceReconnectDelay =
-      Math.min(priceReconnectDelay*2,30000);
-  };
-}
+document.querySelectorAll("#timeframes button").forEach(b=>{
+  b.addEventListener("click",()=>changeTimeframe(b.dataset.tf));
+});
 
 async function start() {
   try {
     createChart();
-    await Promise.all([loadHistory(),refresh24h()]);
-    connectChartSocket();
+    await loadHistory();
+    connectMarketSocket();
     connectPriceSocket();
-
-    $("systemMessage").textContent =
-      "Connected to public Binance market data. " +
-      "Custom candles are aggregated from live trades. " +
-      "No real trading or order execution is available.";
-  } catch (error) {
-    $("systemMessage").textContent =
-      "Initialization failed: " + error.message;
-    $("chartStatus").textContent =
-      "Check internet connectivity and reload.";
+    await refreshAll();
+    $("systemMessage").textContent=
+      "Dashboard initialized. Signal API connected where available. "+
+      "Real order execution remains disabled.";
+  } catch(e) {
+    $("systemMessage").textContent="Initialization error: "+e.message;
+    $("chartStatus").textContent="Check internet and reload the page.";
   }
 }
 
-setInterval(() => {
-  refresh24h().catch(() => {});
-},60000);
-
 start();
+setInterval(()=>refresh24h().catch(()=>{}),60000);
+setInterval(refreshSignal,300000);
 </script>
 </body>
-</html>
+  </html>
+  
