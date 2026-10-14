@@ -119,7 +119,7 @@ else
     trades = cjson.decode("[]"),
     nextId = 1,
     feeRate = 0.001,
-    createdAt = os.time()
+    createdAt = (tonumber(p.timestamp) or 0)
   }
 end
 
@@ -185,7 +185,7 @@ if action == "open" then
     entryPrice = price,
     notional = notional,
     openFee = fee,
-    openedAt = os.time()
+    openedAt = (tonumber(p.timestamp) or 0)
   }
 
   table.insert(s.positions, position)
@@ -198,7 +198,7 @@ if action == "open" then
     quantity = qty,
     price = price,
     fee = fee,
-    time = os.time()
+    time = (tonumber(p.timestamp) or 0)
   })
 
 elseif action == "close" then
@@ -247,7 +247,7 @@ elseif action == "close" then
     openFee = position.openFee,
     closeFee = closeFee,
     netPnl = pnl - position.openFee - closeFee,
-    time = os.time()
+    time = (tonumber(p.timestamp) or 0)
   })
 
   local remaining = cjson.decode("[]")
@@ -266,7 +266,7 @@ while #s.trades > 500 do
   table.remove(s.trades, 1)
 end
 
-s.updatedAt = os.time()
+s.updatedAt = (tonumber(p.timestamp) or 0)
 redis.call("SET", key, cjson.encode(s))
 return cjson.encode(s)
 `;
@@ -332,10 +332,11 @@ async function redisCommand(command) {
     }
 
     const input = {
-      ...payload,
-      symbol,
-      price
-    };
+  ...payload,
+  symbol,
+  price,
+  timestamp: Math.floor(Date.now() / 1000)
+};
 
     const result = await redisCommand([
       "EVAL",
