@@ -95,14 +95,13 @@ footer{text-align:center;padding:20px 12px}
     <div class="note" id="chartStatus">Loading chart...</div>
     <div class="note">Seconds candles are aggregated from actual trades.
     Recent seconds history is limited by the exchange trade-history endpoint.</div>
-  </div>
-
-  <div class="stats section">
-    <div class="panel">
-      <div class="label">Paper account balance</div>
-      <div class="value">$10,000.00</div>
-      <div class="note">Demo display only · No real funds</div>
-    </div>
+  </div>  
+<div class="panel">
+  <div class="label">Paper account equity</div>
+  <div class="value" id="paperEquity">Loading...</div>
+  <div class="note" id="paperCash">Connecting to paper account...</div>
+  <div class="note" id="paperPositions">Open positions: —</div>
+</div>
     <div class="panel">
       <div class="label">Signal engine · 5m</div>
       <div class="value" id="signalValue">LOADING...</div>
