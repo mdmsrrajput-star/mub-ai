@@ -4,14 +4,15 @@ export default async function handler(req, res) {
 
   const LIVE_TRADING_ENABLED = false;
   const STARTING_BALANCE = 10000;
-  const FEE_RATE = 0.001; // 0.10% per side
+  const FEE_RATE = 0.001;
   const STATE_KEY = "mub:paper:account:v1";
 
-  const send = (status, data) => res.status(status).json({
-    mode: "PAPER_ONLY",
-    liveTradingEnabled: LIVE_TRADING_ENABLED,
-    ...data
-  });
+  const send = (status, data) =>
+    res.status(status).json({
+      mode: "PAPER_ONLY",
+      liveTradingEnabled: LIVE_TRADING_ENABLED,
+      ...data
+    });
 
   if (!["GET", "POST"].includes(req.method)) {
     res.setHeader("Allow", "GET, POST");
@@ -29,8 +30,6 @@ export default async function handler(req, res) {
     });
   }
 
-  // Mutations require a secret header. Never put this secret
-  // in public HTML or client-side JavaScript.
   let action = "status";
   let payload = {};
 
@@ -42,7 +41,9 @@ export default async function handler(req, res) {
       supplied.length !== writeKey.length ||
       supplied !== writeKey
     ) {
-      return send(401, { error: "Unauthorized paper-trading request" });
+      return send(401, {
+        error: "Unauthorized paper-trading request"
+      });
     }
 
     payload = req.body || {};
@@ -55,11 +56,18 @@ export default async function handler(req, res) {
       }
     }
 
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      return send(400, { error: "Expected a JSON object" });
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload)
+    ) {
+      return send(400, {
+        error: "Expected a JSON object"
+      });
     }
 
     action = payload.action;
+
     if (!["open", "close"].includes(action)) {
       return send(400, {
         error: "Action must be open or close"
@@ -67,8 +75,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // Only allow these two spot-market symbols.
-  const symbol = String(payload.symbol || "BTCUSDT").toUpperCase();
+  const symbol = String(
+    payload.symbol || "BTCUSDT"
+  ).toUpperCase();
 
   if (!["BTCUSDT", "ETHUSDT"].includes(symbol)) {
     return send(400, {
@@ -79,8 +88,12 @@ export default async function handler(req, res) {
   async function getPrice(pair) {
     const response = await fetch(
       "https://data-api.binance.vision/api/v3/ticker/price?symbol=" +
-      encodeURIComponent(pair),
-      { headers: { Accept: "application/json" } }
+        encodeURIComponent(pair),
+      {
+        headers: {
+          Accept: "application/json"
+        }
+      }
     );
 
     if (!response.ok) {
@@ -97,8 +110,6 @@ export default async function handler(req, res) {
     return price;
   }
 
-  // All account mutations run inside a Redis Lua script,
-  // so concurrent requests cannot overwrite each other's state.
   const script = `
 local key = KEYS[1]
 local action = ARGV[1]
@@ -119,8 +130,11 @@ else
     trades = cjson.decode("[]"),
     nextId = 1,
     feeRate = 0.001,
-    createdAt = (tonumber(p.timestamp) or 0)
+    createdAt = tonumber(p.timestamp) or 0
   }
+
+  -- Persist the initial account immediately.
+  redis.call("SET", key, cjson.encode(s))
 end
 
 local function fail(message)
@@ -129,9 +143,12 @@ end
 
 local function number(v)
   local n = tonumber(v)
-  if not n or n ~= n or n == math.huge or n == -math.huge then
+
+  if not n or n ~= n or
+     n == math.huge or n == -math.huge then
     return nil
   end
+
   return n
 end
 
@@ -165,7 +182,9 @@ if action == "open" then
   local notional = qty * price
   local fee = notional * s.feeRate
 
-  if notional ~= notional or notional == math.huge then
+  if notional ~= notional or
+     notional == math.huge or
+     notional <= 0 then
     return fail("Invalid order value")
   end
 
@@ -185,7 +204,7 @@ if action == "open" then
     entryPrice = price,
     notional = notional,
     openFee = fee,
-    openedAt = (tonumber(p.timestamp) or 0)
+    openedAt = tonumber(p.timestamp) or 0
   }
 
   table.insert(s.positions, position)
@@ -198,7 +217,7 @@ if action == "open" then
     quantity = qty,
     price = price,
     fee = fee,
-    time = (tonumber(p.timestamp) or 0)
+    time = tonumber(p.timestamp) or 0
   })
 
 elseif action == "close" then
@@ -223,17 +242,25 @@ elseif action == "close" then
   end
 
   local pnl
+
   if position.side == "LONG" then
-    pnl = (price - position.entryPrice) * position.quantity
+    pnl = (price - position.entryPrice) *
+      position.quantity
   else
-    pnl = (position.entryPrice - price) * position.quantity
+    pnl = (position.entryPrice - price) *
+      position.quantity
   end
 
-  local closeFee = position.quantity * price * s.feeRate
+  local closeFee =
+    position.quantity * price * s.feeRate
 
-  s.cash = s.cash + position.notional + pnl - closeFee
-  s.realizedPnl = s.realizedPnl + pnl
-      - position.openFee - closeFee
+  s.cash = s.cash + position.notional +
+    pnl - closeFee
+
+  local netPnl =
+    pnl - position.openFee - closeFee
+
+  s.realizedPnl = s.realizedPnl + netPnl
 
   table.insert(s.trades, {
     id = position.id,
@@ -246,97 +273,103 @@ elseif action == "close" then
     grossPnl = pnl,
     openFee = position.openFee,
     closeFee = closeFee,
-    netPnl = pnl - position.openFee - closeFee,
-    time = (tonumber(p.timestamp) or 0)
+    netPnl = netPnl,
+    time = tonumber(p.timestamp) or 0
   })
 
   local remaining = cjson.decode("[]")
+
   for i, item in ipairs(s.positions) do
     if i ~= found then
       table.insert(remaining, item)
     end
   end
+
   s.positions = remaining
 else
   return fail("Unsupported action")
 end
 
--- Keep history bounded.
 while #s.trades > 500 do
   table.remove(s.trades, 1)
 end
 
-s.updatedAt = (tonumber(p.timestamp) or 0)
+s.updatedAt = tonumber(p.timestamp) or 0
+
 redis.call("SET", key, cjson.encode(s))
 return cjson.encode(s)
 `;
 
-  
-async function redisCommand(command) {
-  const response = await fetch(
-    dbUrl.replace(/\/+$/, ""),
-    {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + dbToken,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(command)
+  async function redisCommand(command) {
+    const response = await fetch(
+      dbUrl.replace(/\\/+$/, ""),
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + dbToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(command)
+      }
+    );
+
+    const raw = await response.text();
+
+    if (!response.ok) {
+      console.error(
+        "Upstash HTTP error:",
+        response.status,
+        raw.slice(0, 500)
+      );
+
+      throw new Error(
+        "Upstash HTTP error: " + response.status
+      );
     }
-  );
 
-  const raw = await response.text();
+    let result;
 
-  if (!response.ok) {
-    console.error(
-      "Upstash HTTP error:",
-      response.status,
-      raw.slice(0, 500)
-    );
-    throw new Error(
-      "Upstash HTTP error: " + response.status
-    );
+    try {
+      result = JSON.parse(raw);
+    } catch {
+      throw new Error("Invalid database response");
+    }
+
+    if (result.error) {
+      console.error(
+        "Upstash command error:",
+        result.error
+      );
+
+      throw new Error("Database command failed");
+    }
+
+    return result.result;
   }
-
-  let result;
-
-  try {
-    result = JSON.parse(raw);
-  } catch {
-    console.error("Invalid Upstash response:", raw.slice(0, 500));
-    throw new Error("Invalid database response");
-  }
-
-  if (result.error) {
-    console.error("Upstash command error:", result.error);
-    throw new Error("Database command failed");
-  }
-
-  return result.result;
-}
 
   try {
     let price = null;
 
-    // For opening/closing, use the server-fetched market price
-    // unless a positive price is explicitly supplied for simulation.
     if (action === "open" || action === "close") {
       if (payload.price === undefined) {
         price = await getPrice(symbol);
       } else {
         price = Number(payload.price);
+
         if (!Number.isFinite(price) || price <= 0) {
-          return send(400, { error: "Invalid simulation price" });
+          return send(400, {
+            error: "Invalid simulation price"
+          });
         }
       }
     }
 
     const input = {
-  ...payload,
-  symbol,
-  price,
-  timestamp: Math.floor(Date.now() / 1000)
-};
+      ...payload,
+      symbol,
+      price,
+      timestamp: Math.floor(Date.now() / 1000)
+    };
 
     const result = await redisCommand([
       "EVAL",
@@ -347,16 +380,17 @@ async function redisCommand(command) {
       JSON.stringify(input)
     ]);
 
-    const state = typeof result === "string"
-      ? JSON.parse(result)
-      : result;
+    const state =
+      typeof result === "string"
+        ? JSON.parse(result)
+        : result;
 
-    if (state.error) {
-      return send(400, { error: state.error });
+    if (!state || state.error) {
+      return send(400, {
+        error: state?.error || "Invalid account state"
+      });
     }
 
-    // Add current public market marks for display.
-    // No exchange order is ever submitted.
     const marks = {};
 
     await Promise.all(
@@ -376,8 +410,10 @@ async function redisCommand(command) {
       const usableMark = mark || position.entryPrice;
 
       const pnl = position.side === "LONG"
-        ? (usableMark - position.entryPrice) * position.quantity
-        : (position.entryPrice - usableMark) * position.quantity;
+        ? (usableMark - position.entryPrice) *
+          position.quantity
+        : (position.entryPrice - usableMark) *
+          position.quantity;
 
       unrealizedPnl += pnl;
 
@@ -391,7 +427,8 @@ async function redisCommand(command) {
     const equity = state.cash +
       positions.reduce(
         (sum, position) =>
-          sum + position.notional + position.unrealizedPnl,
+          sum + position.notional +
+            position.unrealizedPnl,
         0
       );
 
@@ -412,11 +449,13 @@ async function redisCommand(command) {
       note: "Paper simulation only. No live orders are possible."
     });
   } catch (error) {
-    console.error("Paper trading API error:", error.message);
+    console.error(
+      "Paper trading API error:",
+      error.message
+    );
+
     return send(502, {
-      error: "Paper service temporarily unavailable",
-      liveTradingEnabled: false
+      error: "Paper service temporarily unavailable"
     });
   }
-    }
-      
+}
