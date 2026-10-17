@@ -533,7 +533,11 @@ async function refreshSignal() {
 async function refreshAll() {
   $("refreshButton").disabled=true;
   try {
-    await Promise.all([refresh24h(),refreshSignal()]);
+await Promise.all([
+  refresh24h(),
+  refreshSignal(),
+  refreshPaperAccount()
+]);
     $("systemMessage").textContent=
       "Public market data and signal refresh completed. "+
       "Paper mode active; no real orders can be placed.";
@@ -543,7 +547,61 @@ async function refreshAll() {
     $("refreshButton").disabled=false;
   }
 }
+async function refreshPaperAccount() {
+  try {
+    const response = await fetch("/api/paper-trades", {
+      method: "GET",
+      cache: "no-store"
+    });
 
+    if (!response.ok) {
+      throw new Error("Paper account HTTP " + response.status);
+    }
+
+    const data = await response.json();
+    if (!data.ok || !data.account) {
+      throw new Error("Paper account response is invalid");
+    }
+
+    const account = data.account;
+    const cash = Number(account.cash);
+    const realized = Number(account.realizedPnl || 0);
+    const positions = Array.isArray(account.positions)
+      ? account.positions
+      : [];
+
+    const equity = cash + positions.reduce((total, position) => {
+      return total + Number(position.notional || 0)
+        + Number(position.unrealizedPnl || 0);
+    }, 0);
+
+    const equityElement = document.getElementById("paperEquity");
+    const cashElement = document.getElementById("paperCash");
+    const positionsElement = document.getElementById("paperPositions");
+
+    if (equityElement) {
+      equityElement.textContent = "$" + equity.toFixed(2);
+    }
+
+    if (cashElement) {
+      cashElement.textContent =
+        "Cash: $" + cash.toFixed(2) +
+        " · Realized P/L: $" + realized.toFixed(2);
+    }
+
+    if (positionsElement) {
+      positionsElement.textContent = positions.length
+        ? "Open positions: " + positions.length
+        : "Open positions: none";
+    }
+  } catch (error) {
+    const cashElement = document.getElementById("paperCash");
+    if (cashElement) {
+      cashElement.textContent =
+        "Paper account unavailable: " + error.message;
+    }
+  }
+}
 async function selectSymbol(next) {
   if(symbol===next || changing) return;
   changing=true;
