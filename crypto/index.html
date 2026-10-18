@@ -75,6 +75,16 @@ footer{text-align:center;padding:20px 12px}
       <button type="button" id="upButton" class="active">▲ UP</button>
       <button type="button" id="downButton">▼ DOWN</button>
     </div>
+    <div class="label section">Prediction expiry / holding time</div>
+    <div class="controls section" role="group" aria-label="Prediction expiry">
+      <button type="button" class="expiryButton active" data-expiry="1m">1 MIN</button>
+      <button type="button" class="expiryButton" data-expiry="3m">3 MIN</button>
+      <button type="button" class="expiryButton" data-expiry="5m">5 MIN</button>
+      <button type="button" class="expiryButton" data-expiry="15m">15 MIN</button>
+      <button type="button" class="expiryButton" data-expiry="30m">30 MIN</button>
+      <button type="button" class="expiryButton" data-expiry="1h">1 HOUR</button>
+    </div>
+    <div class="note section" id="expiryGuidance" aria-live="polite">Selected expiry: 1 minute. A prediction would settle at the end of this period only after a prediction settlement engine is connected.</div>
     <div class="label section">Paper stake (USD per UP/DOWN prediction)</div>
     <div class="controls section" role="group" aria-label="Paper position amount">
       <button type="button" class="amountButton active" data-amount="1">$1</button>
@@ -727,6 +737,23 @@ async function changeTimeframe(tf) {
 let paperExecutionMode = "MANUAL";
 let paperDirection = "UP";
 let paperAmount = 1;
+let paperExpiry = "1m";
+
+const expiryLabels = {
+  "1m":"1 minute", "3m":"3 minutes", "5m":"5 minutes",
+  "15m":"15 minutes", "30m":"30 minutes", "1h":"1 hour"
+};
+document.querySelectorAll(".expiryButton").forEach(button => {
+  button.addEventListener("click", () => {
+    paperExpiry = button.dataset.expiry;
+    document.querySelectorAll(".expiryButton").forEach(b =>
+      b.classList.toggle("active", b === button)
+    );
+    $("expiryGuidance").textContent = "Selected expiry: " + expiryLabels[paperExpiry] +
+      ". A prediction would settle at the end of this period only after a prediction settlement engine is connected.";
+    updatePaperTradeControls();
+  });
+});
 
 function updatePaperAmount() {
   const field = $("customPaperAmount");
@@ -762,7 +789,7 @@ function updatePaperTradeControls() {
   const amountValid = updatePaperAmount();
   $("tradeModeStatus").textContent =
     paperExecutionMode + " · " + paperDirection + " · $" + paperAmount.toFixed(2) +
-    " stake selected. " +
+    " stake · " + expiryLabels[paperExpiry] + " expiry selected. " +
     (amountValid
       ? "Paper order placement remains locked until secure trade authorization is available."
       : "Fix the amount before any paper order can be considered.");
