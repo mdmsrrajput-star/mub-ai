@@ -102,10 +102,16 @@ if action == "settle" then
  s.active.settledAt = tonumber(p.now)
  s.active.result = won and "WIN" or "LOSS"
  s.active.pnl = pnl
- table.insert(s.history, 1, s.active)
+ -- Avoid referencing the same Lua table from both active and history;
+ -- some cjson encoders treat that shared reference as a cycle.
+ local settled = {}
+ for k, v in pairs(s.active) do settled[k] = v end
+ table.insert(s.history, 1, settled)
  while #s.history > 100 do table.remove(s.history) end
- local encoded = cjson.encode(s)
- if not encoded then return redis.error_reply("Could not encode settled prediction state") end
+ local ok, encoded = pcall(cjson.encode, s)
+ if not ok or not encoded then
+  return redis.error_reply("Could not encode settled prediction state: " .. tostring(encoded))
+ end
  redis.call("SET", KEYS[1], encoded)
  return encoded
 end
