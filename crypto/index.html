@@ -49,20 +49,27 @@ footer{text-align:center;padding:20px 12px}
 </head>
 <body>
 <header>
-  <div class="brand">MuB Crypto Intelligence</div>
-  <div class="sub">Live market monitor · Signal engine · Paper trading</div>
+  <div class="brand">MuB Market Intelligence</div>
+  <div class="sub">Gold-first market monitor · Forex & crypto · Paper trading</div>
 </header>
 
 <main>
   <div class="banner">PAPER MODE ACTIVE · REAL ORDER EXECUTION DISABLED</div>
 
   <div class="controls section">
-    <button class="active" id="btcButton">BTC / USDT</button>
+    <button class="active" id="goldButton">★ GOLD · XAU/USD</button>
+    <button id="btcButton">BTC / USDT</button>
     <button id="ethButton">ETH / USDT</button>
     <button id="refreshButton">Refresh now</button>
   </div>
 
   <div class="grid section">
+    <div class="panel" id="goldPanel">
+      <div class="label">★ PRIORITY MARKET · GOLD SPOT (XAU/USD)</div>
+      <div class="price" id="goldPrice">Loading verified gold feed…</div>
+      <div class="change" id="goldFreshness">Connecting to gold data provider…</div>
+      <div class="note">Indicative spot price per troy ounce; not a broker execution quote.</div>
+    </div>
     <div class="panel">
       <div class="label" id="priceLabel">BTC / USDT · LIVE PRICE</div>
       <div class="price" id="livePrice">Connecting...</div>
@@ -134,9 +141,7 @@ footer{text-align:center;padding:20px 12px}
       Initializing public market data and signal engine...
     </div>
     <div class="note" style="margin-top:8px">
-      Signals are experimental and are not guaranteed to be profitable.
-      Paper balance is illustrative; persistent paper-trade accounting
-      has not yet been implemented.
+      Gold spot uses a separate public feed and reports freshness. Forex/gold signals and order execution are not enabled. Crypto signals are experimental and are not guaranteed profitable.
     </div>
   </div>
 </main>
@@ -148,6 +153,8 @@ footer{text-align:center;padding:20px 12px}
 
 const API = "https://data-api.binance.vision/api/v3";
 const WS = "wss://stream.binance.com:9443/ws/";
+const GOLD_API = "https://xaus.com/api/v1/spot?compact=1";
+let goldLastValue = null;
 
 let symbol = "BTCUSDT";
 let timeframe = "5m";
@@ -170,6 +177,30 @@ const $ = id => document.getElementById(id);
 
 function symbolLabel(s) {
   return s === "BTCUSDT" ? "BTC / USDT" : "ETH / USDT";
+}
+
+async function refreshGoldFeed() {
+  const priceEl = $("goldPrice"), freshnessEl = $("goldFreshness");
+  try {
+    const data = await getJSON(GOLD_API);
+    const price = Number(data.spot_usd_oz ?? data.xau?.price);
+    if (!Number.isFinite(price) || price <= 0) throw new Error("Invalid gold price payload");
+    goldLastValue = price;
+    priceEl.textContent = "$" + money(price);
+    const state = data.data_state || {};
+    const status = state.status || "unknown freshness";
+    const age = Number(state.age_seconds);
+    const stamp = state.as_of || data.updated_at;
+    freshnessEl.textContent = "Feed: " + status.toUpperCase() +
+      (Number.isFinite(age) ? " · age " + Math.round(age) + "s" : "") +
+      (stamp ? " · source time " + new Date(stamp).toLocaleTimeString() : "");
+    freshnessEl.className = "change " + (status === "fresh" ? "positive" : "negative");
+    if (status !== "fresh") freshnessEl.textContent += " · NOT FOR TRADE DECISIONS";
+  } catch (e) {
+    priceEl.textContent = goldLastValue === null ? "FEED UNAVAILABLE" : "$" + money(goldLastValue) + " (last seen)";
+    freshnessEl.textContent = "Gold feed error: " + e.message + " · Do not treat cached value as live.";
+    freshnessEl.className = "change negative";
+  }
 }
 
 function money(n) {
@@ -534,6 +565,7 @@ async function refreshAll() {
   $("refreshButton").disabled=true;
   try {
 await Promise.all([
+  refreshGoldFeed(),
   refresh24h(),
   refreshSignal(),
   refreshPaperAccount()
@@ -603,7 +635,18 @@ async function refreshPaperAccount() {
   }
 }
 async function selectSymbol(next) {
+  if(next === "XAUUSD") {
+    $("goldButton").classList.add("active");
+    $("btcButton").classList.remove("active");
+    $("ethButton").classList.remove("active");
+    $("priceLabel").textContent = "★ GOLD · XAU/USD · LIVE SPOT";
+    await refreshGoldFeed();
+    $("chartStatus").textContent = "Gold spot price feed selected above. Crypto chart and crypto-only signal engine are not gold data.";
+    $("systemMessage").textContent = "Gold is the priority market. Spot feed is separate from crypto charts and the crypto paper executor. No gold orders are executed.";
+    return;
+  }
   if(symbol===next || changing) return;
+  $("goldButton").classList.remove("active");
   changing=true;
   symbol=next;
 
@@ -648,6 +691,7 @@ async function changeTimeframe(tf) {
   }
 }
 
+$("goldButton").addEventListener("click",()=>selectSymbol("XAUUSD"));
 $("btcButton").addEventListener("click",()=>selectSymbol("BTCUSDT"));
 $("ethButton").addEventListener("click",()=>selectSymbol("ETHUSDT"));
 $("refreshButton").addEventListener("click",refreshAll);
@@ -672,6 +716,8 @@ async function start() {
   }
 }
 
+refreshGoldFeed();
+setInterval(()=>refreshGoldFeed().catch(()=>{}),120000);
 start();
 setInterval(()=>refresh24h().catch(()=>{}),60000);
 setInterval(refreshSignal,300000);
