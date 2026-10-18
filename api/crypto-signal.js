@@ -12,21 +12,89 @@ export default async function handler(req, res) {
   const symbol = String(req.query?.symbol || "BTCUSDT")
     .toUpperCase();
 
-  const allowed = ["BTCUSDT", "ETHUSDT"];
-
-  if (!allowed.includes(symbol)) {
+  if (!["BTCUSDT", "ETHUSDT"].includes(symbol)) {
     return res.status(400).json({
       error: "Supported symbols: BTCUSDT, ETHUSDT"
     });
   }
 
-  try {
+  const emaSeries = (values, period) => {
+    const alpha = 2 / (period + 1);
+    let value = values[0];
+
+    return values.map((v, i) => {
+      value = i === 0
+        ? v
+        : v * alpha + value * (1 - alpha);
+      return value;
+    });
+  };
+
+  const rsi = (values, period = 14) => {
+    if (values.length <= period) return 50;
+
+    let gains = 0;
+    let losses = 0;
+
+    for (let i = 1; i <= period; i++) {
+      const change = values[i] - values[i - 1];
+      gains += Math.max(change, 0);
+      losses += Math.max(-change, 0);
+    }
+
+    let avgGain = gains / period;
+    let avgLoss = losses / period;
+
+    for (let i = period + 1; i < values.length; i++) {
+      const change = values[i] - values[i - 1];
+
+      avgGain =
+        (avgGain * (period - 1) + Math.max(change, 0)) / period;
+
+      avgLoss =
+        (avgLoss * (period - 1) + Math.max(-change, 0)) / period;
+    }
+
+    if (avgLoss === 0) return 100;
+    return 100 - 100 / (1 + avgGain / avgLoss);
+  };
+
+  const atr = (candles, period = 14) => {
+    const ranges = [];
+
+    for (let i = 1; i < candles.length; i++) {
+      const c = candles[i];
+      const prev = candles[i - 1];
+
+      ranges.push(Math.max(
+        c.high - c.low,
+        Math.abs(c.high - prev.close),
+        Math.abs(c.low - prev.close)
+      ));
+    }
+
+    if (ranges.length < period) return 0;
+
+    let value = ranges.slice(0, period)
+      .reduce((sum, n) => sum + n, 0) / period;
+
+    for (let i = period; i < ranges.length; i++) {
+      value = (value * (period - 1) + ranges[i]) / period;
+    }
+
+    return value;
+  };
+
+  async function fetchCandles(interval, durationSeconds, limit) {
     const url =
       "https://data-api.binance.vision/api/v3/klines" +
       "?symbol=" + encodeURIComponent(symbol) +
-      "&interval=5m&limit=150";
+      "&interval=" + interval +
+      "&limit=" + limit;
 
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      cache: "no-store"
+    });
 
     if (!response.ok) {
       throw new Error("Market data HTTP " + response.status);
@@ -34,175 +102,249 @@ export default async function handler(req, res) {
 
     const rows = await response.json();
 
-    if (!Array.isArray(rows) || rows.length < 60) {
-      throw new Error("Insufficient candle history");
+    if (!Array.isArray(rows)) {
+      throw new Error("Invalid market data");
     }
 
-    // Exclude the currently forming candle.
-    const nowSeconds = Math.floor(Date.now() / 1000);
-    const candles = rows
-      .filter(k => Math.floor(Number(k[0]) / 1000) + 300 <= nowSeconds)
+    const now = Math.floor(Date.now() / 1000);
+
+    return rows
+      // Exclude the currently forming candle.
+      .filter(k =>
+        Math.floor(Number(k[0]) / 1000) + durationSeconds <= now
+      )
       .map(k => ({
         time: Math.floor(Number(k[0]) / 1000),
         open: Number(k[1]),
         high: Number(k[2]),
         low: Number(k[3]),
-        close: Number(k[4])
+        close: Number(k[4]),
+        volume: Number(k[5])
       }));
+  }
+
+  try {
+    const [candles, trendCandles] = await Promise.all([
+      fetchCandles("5m", 300, 180),
+      fetchCandles("15m", 900, 120)
+    ]);
+
+    if (candles.length < 60 || trendCandles.length < 55) {
+      throw new Error("Insufficient completed candle history");
+    }
 
     const closes = candles.map(c => c.close);
+    const last = candles[candles.length - 1];
 
-    function ema(values, period) {
-      const alpha = 2 / (period + 1);
-      let value = values[0];
+    const ema20Series = emaSeries(closes, 20);
+    const ema50Series = emaSeries(closes, 50);
 
-      for (let i = 1; i < values.length; i++) {
-        value = values[i] * alpha + value * (1 - alpha);
-      }
+    const ema20 = ema20Series[ema20Series.length - 1];
+    const ema50 = ema50Series[ema50Series.length - 1];
 
-      return value;
-    }
-
-    function rsi(values, period = 14) {
-      let gains = 0;
-      let losses = 0;
-
-      for (let i = 1; i <= period; i++) {
-        const change = values[i] - values[i - 1];
-        gains += Math.max(change, 0);
-        losses += Math.max(-change, 0);
-      }
-
-      let avgGain = gains / period;
-      let avgLoss = losses / period;
-
-      for (let i = period + 1; i < values.length; i++) {
-        const change = values[i] - values[i - 1];
-
-        avgGain =
-          (avgGain * (period - 1) + Math.max(change, 0)) / period;
-
-        avgLoss =
-          (avgLoss * (period - 1) + Math.max(-change, 0)) / period;
-      }
-
-      if (avgLoss === 0) return 100;
-
-      return 100 - 100 / (1 + avgGain / avgLoss);
-    }
-
-    function atr(data, period = 14) {
-      const ranges = [];
-
-      for (let i = 1; i < data.length; i++) {
-        ranges.push(Math.max(
-          data[i].high - data[i].low,
-          Math.abs(data[i].high - data[i - 1].close),
-          Math.abs(data[i].low - data[i - 1].close)
-        ));
-      }
-
-      let value = ranges.slice(0, period)
-        .reduce((sum, n) => sum + n, 0) / period;
-
-      for (let i = period; i < ranges.length; i++) {
-        value = (value * (period - 1) + ranges[i]) / period;
-      }
-
-      return value;
-    }
-
-    const fastEMA = ema(closes.slice(-100), 20);
-    const slowEMA = ema(closes.slice(-100), 50);
     const rsi14 = rsi(closes);
     const atr14 = atr(candles);
 
-    // MACD: calculate EMA series so both lines use matching history.
-    function emaSeries(values, period) {
-      const alpha = 2 / (period + 1);
-      const result = [];
-      let value = values[0];
+    const macdFast = emaSeries(closes, 12);
+    const macdSlow = emaSeries(closes, 26);
 
-      for (let i = 0; i < values.length; i++) {
-        value = i === 0
-          ? values[i]
-          : values[i] * alpha + value * (1 - alpha);
-
-        result.push(value);
-      }
-
-      return result;
-    }
-
-    const fastSeries = emaSeries(closes, 12);
-    const slowSeries = emaSeries(closes, 26);
     const macdLine = closes.map(
-      (_, i) => fastSeries[i] - slowSeries[i]
+      (_, i) => macdFast[i] - macdSlow[i]
     );
 
-    const signalLine = emaSeries(macdLine, 9);
+    const signalSeries = emaSeries(macdLine, 9);
     const macd = macdLine[macdLine.length - 1];
-    const macdSignal = signalLine[signalLine.length - 1];
+    const macdSignal = signalSeries[signalSeries.length - 1];
 
-    let score = 0;
-    const reasons = [];
+    const trendCloses = trendCandles.map(c => c.close);
+    const trendEma20 = emaSeries(trendCloses, 20).at(-1);
+    const trendEma50 = emaSeries(trendCloses, 50).at(-1);
 
-    if (fastEMA > slowEMA) {
-      score++;
-      reasons.push("EMA20 above EMA50");
-    } else {
-      score--;
-      reasons.push("EMA20 below EMA50");
+    const trend =
+      trendEma20 > trendEma50 ? "BULLISH" :
+      trendEma20 < trendEma50 ? "BEARISH" :
+      "NEUTRAL";
+
+    // Strict three-candle fair value gap detection.
+    // Only use completed candles, recent gaps, and meaningful displacement.
+    let fvg = null;
+
+    if (atr14 > 0) {
+      const firstIndex = Math.max(2, candles.length - 20);
+
+      for (let i = candles.length - 1; i >= firstIndex; i--) {
+        const a = candles[i - 2];
+        const b = candles[i - 1];
+        const c = candles[i];
+
+        const displacement = Math.abs(b.close - b.open);
+
+        if (displacement < atr14 * 0.8) continue;
+
+        // Bullish FVG: third candle low is above first candle high.
+        if (c.low > a.high) {
+          const gap = c.low - a.high;
+
+          if (gap >= atr14 * 0.1) {
+            fvg = {
+              direction: "BULLISH",
+              lower: a.high,
+              upper: c.low,
+              formedAt: c.time,
+              gap,
+              retested: false,
+              reaction: false,
+              ageCandles: 0
+            };
+            break;
+          }
+        }
+
+        // Bearish FVG: third candle high is below first candle low.
+        if (c.high < a.low) {
+          const gap = a.low - c.high;
+
+          if (gap >= atr14 * 0.1) {
+            fvg = {
+              direction: "BEARISH",
+              lower: c.high,
+              upper: a.low,
+              formedAt: c.time,
+              gap,
+              retested: false,
+              reaction: false,
+              ageCandles: 0
+            };
+            break;
+          }
+        }
+      }
     }
 
-    if (rsi14 > 50 && rsi14 < 70) {
-      score++;
-      reasons.push("RSI bullish but not overbought");
-    } else if (rsi14 < 50 && rsi14 > 30) {
-      score--;
-      reasons.push("RSI bearish but not oversold");
-    } else {
-      reasons.push("RSI outside preferred momentum range");
+    if (fvg) {
+      const later = candles.filter(c => c.time > fvg.formedAt);
+
+      fvg.ageCandles = later.length;
+
+      fvg.retested = later.some(c =>
+        c.low <= fvg.upper && c.high >= fvg.lower
+      );
+
+      // Require a completed candle to close away from the gap.
+      fvg.reaction = fvg.direction === "BULLISH"
+        ? last.close > fvg.upper && last.close > last.open
+        : last.close < fvg.lower && last.close < last.open;
     }
 
-    if (macd > macdSignal) {
-      score++;
-      reasons.push("MACD above signal line");
-    } else {
-      score--;
-      reasons.push("MACD below signal line");
-    }
+    // Three independent directional filters.
+    const votes = [
+      {
+        name: "EMA trend",
+        side: ema20 > ema50 ? "BUY" :
+          ema20 < ema50 ? "SELL" : "WAIT"
+      },
+      {
+        name: "RSI momentum",
+        side: rsi14 > 52 && rsi14 < 68 ? "BUY" :
+          rsi14 < 48 && rsi14 > 32 ? "SELL" : "WAIT"
+      },
+      {
+        name: "MACD",
+        side: macd > macdSignal ? "BUY" :
+          macd < macdSignal ? "SELL" : "WAIT"
+      }
+    ];
 
-    const signal =
-      score >= 2 ? "BUY" :
-      score <= -2 ? "SELL" : "WAIT";
+    const buyVotes = votes.filter(v => v.side === "BUY").length;
+    const sellVotes = votes.filter(v => v.side === "SELL").length;
+
+    const agreementPercent =
+      Math.max(buyVotes, sellVotes) / votes.length * 100;
+
+    const reasons = [
+      "Analysis uses completed 5-minute candles",
+      "15-minute trend: " + trend,
+      "Indicator agreement: " + agreementPercent.toFixed(0) + "%",
+      fvg
+        ? "Recent FVG: " + fvg.direction
+        : "No qualifying recent FVG"
+    ];
+
+    let signal = "WAIT";
+
+    // All filters must agree. Agreement is not win probability.
+    if (
+      fvg &&
+      fvg.ageCandles > 0 &&
+      fvg.ageCandles <= 12 &&
+      fvg.retested &&
+      fvg.reaction &&
+      fvg.direction === "BULLISH" &&
+      trend === "BULLISH" &&
+      buyVotes === 3
+    ) {
+      signal = "BUY";
+      reasons.push("Bullish FVG retest and reaction confirmed");
+    } else if (
+      fvg &&
+      fvg.ageCandles > 0 &&
+      fvg.ageCandles <= 12 &&
+      fvg.retested &&
+      fvg.reaction &&
+      fvg.direction === "BEARISH" &&
+      trend === "BEARISH" &&
+      sellVotes === 3
+    ) {
+      signal = "SELL";
+      reasons.push("Bearish FVG retest and reaction confirmed");
+    } else {
+      reasons.push(
+        "Strict conditions not all satisfied; waiting is intentional"
+      );
+    }
 
     return res.status(200).json({
       mode: "PAPER_ONLY",
       executionEnabled: false,
+      liveTradingEnabled: false,
       symbol,
       interval: "5m",
+      trendInterval: "15m",
       signal,
-      score,
+      score: buyVotes - sellVotes,
+      agreementPercent,
+      agreementIsWinProbability: false,
+      votes,
       reasons,
+      fvg,
+      trend,
       indicators: {
-        ema20: fastEMA,
-        ema50: slowEMA,
+        ema20,
+        ema50,
         rsi14,
         macd,
         macdSignal,
-        atr14
+        atr14,
+        trendEma20,
+        trendEma50
       },
-      candle: candles[candles.length - 1],
+      candle: last,
       candlesUsed: candles.length,
       generatedAt: new Date().toISOString(),
-      note: "Experimental indicator signal, not a guaranteed prediction."
+      note:
+        "Experimental indicator filter only. No guarantee of profit. " +
+        "Paper mode only; this endpoint never places orders."
     });
   } catch (error) {
+    console.error("Signal calculation failed:", error.message);
+
     return res.status(502).json({
+      mode: "PAPER_ONLY",
+      executionEnabled: false,
+      liveTradingEnabled: false,
       error: "Signal calculation failed",
-      detail: error.message
+      detail:
+        "Market data unavailable or incomplete. Fail closed; do not trade."
     });
   }
-}
-  
+                }
