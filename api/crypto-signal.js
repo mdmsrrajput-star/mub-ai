@@ -236,6 +236,50 @@ export default async function handler(req, res) {
         : last.close < fvg.lower && last.close < last.open;
     }
 
+    // Heuristic order-block detection from completed 5-minute candles.
+    // A candidate is the last opposite-colour candle before a strong move
+    // that closes beyond the prior five-candle structure.
+    const orderBlocks = [];
+    if (atr14 > 0) {
+      const first = Math.max(5, candles.length - 45);
+      for (let i = candles.length - 4; i >= first; i--) {
+        const candidate = candles[i];
+        const bullishCandidate = candidate.close < candidate.open;
+        const bearishCandidate = candidate.close > candidate.open;
+        if (!bullishCandidate && !bearishCandidate) continue;
+        let found = null;
+        for (let j = i + 1; j <= Math.min(i + 3, candles.length - 1); j++) {
+          const impulse = candles[j];
+          const body = Math.abs(impulse.close - impulse.open);
+          if (body < atr14 * 0.8) continue;
+          const prior = candles.slice(Math.max(0, i - 5), i);
+          const priorHigh = Math.max(...prior.map(x => x.high));
+          const priorLow = Math.min(...prior.map(x => x.low));
+          if (bullishCandidate && impulse.close > priorHigh && impulse.close > impulse.open) {
+            found = { direction: "BULLISH", lower: candidate.low, upper: candidate.high, formedAt: candidate.time };
+            break;
+          }
+          if (bearishCandidate && impulse.close < priorLow && impulse.close < impulse.open) {
+            found = { direction: "BEARISH", lower: candidate.low, upper: candidate.high, formedAt: candidate.time };
+            break;
+          }
+        }
+        if (found) {
+          const later = candles.filter(x => x.time > found.formedAt);
+          found.ageCandles = later.length;
+          found.retested = later.some(x => x.low <= found.upper && x.high >= found.lower);
+          found.reaction = found.direction === "BULLISH"
+            ? last.close > found.upper && last.close > last.open
+            : last.close < found.lower && last.close < last.open;
+          found.fresh = !found.retested;
+          orderBlocks.push(found);
+          if (orderBlocks.length >= 2) break;
+        }
+      }
+    }
+    const bullishOB = orderBlocks.find(b => b.direction === "BULLISH");
+    const bearishOB = orderBlocks.find(b => b.direction === "BEARISH");
+
     // Three independent directional filters.
     const votes = [
       {
