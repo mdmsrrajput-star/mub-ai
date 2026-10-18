@@ -311,7 +311,10 @@ export default async function handler(req, res) {
       "Indicator agreement: " + agreementPercent.toFixed(0) + "%",
       fvg
         ? "Recent FVG: " + fvg.direction
-        : "No qualifying recent FVG"
+        : "No qualifying recent FVG",
+      orderBlocks.length
+        ? "Order blocks: " + orderBlocks.map(b => b.direction + (b.retested ? " retested" : " fresh") + (b.reaction ? " with reaction" : "")).join(", ")
+        : "No qualifying recent order block"
     ];
 
     let signal = "WAIT";
@@ -323,6 +326,7 @@ export default async function handler(req, res) {
       fvg.ageCandles <= 12 &&
       fvg.retested &&
       fvg.reaction &&
+      bullishOB && bullishOB.retested && bullishOB.reaction && bullishOB.ageCandles > 0 && bullishOB.ageCandles <= 12 &&
       fvg.direction === "BULLISH" &&
       trend === "BULLISH" &&
       buyVotes === 3
@@ -335,6 +339,7 @@ export default async function handler(req, res) {
       fvg.ageCandles <= 12 &&
       fvg.retested &&
       fvg.reaction &&
+      bearishOB && bearishOB.retested && bearishOB.reaction && bearishOB.ageCandles > 0 && bearishOB.ageCandles <= 12 &&
       fvg.direction === "BEARISH" &&
       trend === "BEARISH" &&
       sellVotes === 3
@@ -361,6 +366,7 @@ export default async function handler(req, res) {
       votes,
       reasons,
       fvg,
+      orderBlocks,
       trend,
       indicators: {
         ema20,
