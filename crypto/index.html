@@ -213,6 +213,11 @@ footer{text-align:center;padding:20px 12px}
       <div class="note" id="signalUpdated"></div>
     </div>
     <div class="panel">
+      <div class="label">Order block analysis · 5m</div>
+      <div class="value" id="orderBlockValue">CALCULATING...</div>
+      <div class="note" id="orderBlockDetails">Detecting potential bullish and bearish zones from completed candles.</div>
+    </div>
+    <div class="panel">
       <div class="label">Indicator readings</div>
       <div class="note" id="indicators">Waiting for analysis...</div>
     </div>
@@ -272,9 +277,40 @@ let analyticsGeneration = 0;
 let lastCandlesForAnalytics = [];
 let depthTimer = null;
 let refreshingSignal = false;
+let orderBlockLines = [];
 
 const $ = id => document.getElementById(id);
 
+function clearOrderBlockLines() {
+  if (!candleSeries) return;
+  for (const line of orderBlockLines) { try { candleSeries.removePriceLine(line); } catch (_) {} }
+  orderBlockLines = [];
+}
+function renderOrderBlocks(data, expectedSymbol) {
+  if (expectedSymbol !== symbol) return;
+  clearOrderBlockLines();
+  const blocks = data && Array.isArray(data.orderBlocks) ? data.orderBlocks : [];
+  const active = blocks.filter(b => Number.isFinite(Number(b.lower)) && Number.isFinite(Number(b.upper)));
+  if (!active.length) {
+    $("orderBlockValue").textContent = "NO QUALIFYING ZONE";
+    $("orderBlockDetails").textContent = "No recent displacement-based order block passed the detection rules. No signal from this feature.";
+    return;
+  }
+  const labels=[];
+  for (const b of active) {
+    const bullish = b.direction === "BULLISH";
+    const color = bullish ? "#22c55e" : "#fb7185";
+    const prefix = bullish ? "Bullish OB" : "Bearish OB";
+    labels.push(prefix + " " + (b.retested ? "RETESTED" : "FRESH") + (b.reaction ? " · reaction" : ""));
+    for (const [level, suffix] of [[Number(b.lower),"low"],[Number(b.upper),"high"]]) {
+      orderBlockLines.push(candleSeries.createPriceLine({price:level,color,lineWidth:2,lineStyle:2,axisLabelVisible:true,title:prefix+" "+suffix}));
+    }
+  }
+  const reacted=active.some(b=>b.retested && b.reaction);
+  $("orderBlockValue").textContent = reacted ? "RETEST + REACTION DETECTED" : "ZONE FOUND · WAIT FOR CONFIRMATION";
+  $("orderBlockValue").style.color = reacted ? "var(--green)" : "var(--blue)";
+  $("orderBlockDetails").textContent = labels.join(" | ") + ". Zones are heuristic price areas, not verified institutional orders.";
+}
 function symbolLabel(s) {
   return s === "BTCUSDT" ? "BTC / USDT" : "ETH / USDT";
 }
@@ -701,6 +737,7 @@ async function refreshSignal() {
       " · ATR14: "+Number(i.atr14).toFixed(2);
 
     $("signalReasons").textContent=(data.reasons||[]).join(" · ");
+    renderOrderBlocks(data, symbol);
     setStatus("signalConnection","CONNECTED",true);
   } catch(e) {
     $("signalValue").textContent="UNAVAILABLE";
@@ -708,6 +745,8 @@ async function refreshSignal() {
     $("signalScore").textContent=e.message;
     $("indicators").textContent="No current indicator readings.";
     $("signalReasons").textContent="Check that the signal API is deployed.";
+    $("orderBlockValue").textContent="UNAVAILABLE";
+    $("orderBlockDetails").textContent="Order-block analysis requires the signal API response.";
     setStatus("signalConnection","ERROR",false);
   } finally {
     refreshingSignal=false;
