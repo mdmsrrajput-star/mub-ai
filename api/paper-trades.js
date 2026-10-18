@@ -2,6 +2,7 @@
 const ACCOUNT_KEY = "mub:paper:account:v1";
 const STARTING_BALANCE = 10000;
 const FEE_RATE = 0.001; // 0.1% per transaction
+const DAILY_LOSS_LIMIT = STARTING_BALANCE * 0.02;
 
 const LUA_SCRIPT = `
 local raw = redis.call("GET", KEYS[1])
@@ -57,6 +58,19 @@ if not price or price <= 0 then
 end
 
 if action == "open" then
+  -- This guard limits daily realized losses only; it does not cap unrealized losses.
+  local dailyPnl = 0
+  local dayStart = tonumber(p.dayStart) or 0
+  for _, trade in ipairs(s.trades) do
+    if trade.action == "CLOSE" and tonumber(trade.timestamp or 0) >= dayStart then
+      dailyPnl = dailyPnl + (tonumber(trade.netPnl) or 0)
+    end
+  end
+  local dailyLossLimit = tonumber(p.dailyLossLimit) or 200
+  if dailyPnl <= -dailyLossLimit then
+    return redis.error_reply("Daily realized loss limit reached")
+  end
+
   if side ~= "LONG" and side ~= "SHORT" then
     return redis.error_reply("Side must be LONG or SHORT")
   end
@@ -315,7 +329,12 @@ export default async function handler(req, res) {
       price,
       side: body.side || "LONG",
       notional: Number(body.notional),
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      dailyLossLimit: DAILY_LOSS_LIMIT,
+      dayStart: (() => {
+        const now = new Date();
+        return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      })()
     };
 
     const account = await runLedger(action, payload);
@@ -330,7 +349,7 @@ export default async function handler(req, res) {
 
     const message = error.message || "Unknown server error";
     const clientError =
-      /Unsupported symbol|valid price|positive|already open|Insufficient|No open position|Side must|Unsupported action/i.test(message);
+      /Unsupported symbol|valid price|positive|already open|Insufficient|No open position|Side must|Unsupported action|Daily realized loss limit/i.test(message);
 
     return send(res, clientError ? 400 : 500, {
       ok: false,
