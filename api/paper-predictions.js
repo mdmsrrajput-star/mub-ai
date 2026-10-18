@@ -23,12 +23,35 @@ async function redisCommand(command) {
 }
 async function getPrice(symbol) {
   if (!ALLOWED_SYMBOLS.includes(symbol)) throw new Error("Only BTC/USDT and ETH/USDT predictions are enabled");
-  const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`, { cache: "no-store" });
-  if (!response.ok) throw new Error("Market price unavailable; prediction not started");
-  const data = await response.json();
-  const price = Number(data.price);
-  if (!Number.isFinite(price) || price <= 0) throw new Error("Invalid market price; prediction not started");
-  return price;
+  // Try multiple public Binance market-data hosts. A failure on one hostname
+  // (regional routing, transient outage, or rate limiting) should not block a paper entry.
+  const hosts = [
+    "https://api.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+    "https://data-api.binance.vision"
+  ];
+  let lastError = "Market price unavailable; prediction not started";
+  for (const host of hosts) {
+    try {
+      const response = await fetch(`${host}/api/v3/ticker/price?symbol=${symbol}`, {
+        headers: { Accept: "application/json" },
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        lastError = `Market price host returned HTTP ${response.status}`;
+        continue;
+      }
+      const data = await response.json();
+      const price = Number(data && data.price);
+      if (Number.isFinite(price) && price > 0) return price;
+      lastError = "Market price response was invalid";
+    } catch (error) {
+      lastError = error && error.message ? error.message : "Market price request failed";
+    }
+  }
+  throw new Error(`Market price unavailable; prediction not started (${lastError})`);
 }
 const LUA = `
 local raw = redis.call("GET", KEYS[1])
