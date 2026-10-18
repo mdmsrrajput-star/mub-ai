@@ -61,7 +61,12 @@ end
 if action == "open" then
   -- This guard limits daily realized losses only; it does not cap unrealized losses.
   local dailyPnl = 0
-  local dayStart = tonumber(p.dayStart) or 0
+  local dayStart = tonumber(p.dayStart)
+  -- Fail closed if the API did not provide today's UTC midnight.
+  -- Falling back to 0 would incorrectly count all historical closed trades.
+  if not dayStart or dayStart <= 0 or dayStart % 86400000 ~= 0 then
+    return redis.error_reply("Valid UTC dayStart is required")
+  end
   for _, trade in ipairs(s.trades) do
     if trade.action == "CLOSE" and tonumber(trade.timestamp or 0) >= dayStart then
       dailyPnl = dailyPnl + (tonumber(trade.netPnl) or 0)
