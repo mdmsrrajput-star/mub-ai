@@ -104,6 +104,13 @@ footer{text-align:center;padding:20px 12px}
     <div class="note" id="tradeSignalStatus">
       AUTO SIGNAL reads the crypto signal API; it does not place orders. Gold and forex signals are not enabled.
     </div>
+    <button type="button" id="startPredictionButton" class="section" style="width:100%;padding:13px;background:#245e4d;color:#ffffff;font-weight:700;border:1px solid #398c70;border-radius:9px">START PAPER PREDICTION</button>
+    <div class="panel section" id="predictionAccountPanel">
+      <div class="label">Paper prediction account</div>
+      <div class="price" id="predictionBalance">$10,000.00</div>
+      <div class="note" id="predictionStatus" aria-live="polite">Checking paper prediction ledger…</div>
+      <div class="note" id="predictionHistory"></div>
+    </div>
   </div>
 
   <div class="grid section">
@@ -781,6 +788,88 @@ $("customPaperAmount").addEventListener("input", () => {
   updatePaperTradeControls();
 });
 
+let predictionRequestBusy = false;
+let predictionPollHandle = null;
+
+function formatUsd(value) {
+  return "$" + Number(value || 0).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function renderPredictionAccount(data) {
+  const account = data && data.account ? data.account : {};
+  $("predictionBalance").textContent = formatUsd(account.balance ?? 10000);
+  const active = account.active;
+  if (active && active.status === "PENDING") {
+    const seconds = Math.max(0, Math.ceil((Number(active.expiresAt) - Date.now()) / 1000));
+    $("predictionStatus").textContent = "PENDING · " + active.symbol + " · " + active.direction +
+      " · Stake " + formatUsd(active.stake) + " · Entry " + Number(active.entryPrice).toLocaleString("en-US", {maximumFractionDigits:8}) +
+      " · settles in " + seconds + "s. Keep this page open for prompt settlement.";
+    $("startPredictionButton").disabled = true;
+    $("startPredictionButton").textContent = "PREDICTION IN PROGRESS";
+  } else {
+    $("startPredictionButton").disabled = predictionRequestBusy || !["BTCUSDT","ETHUSDT"].includes(symbol);
+    $("startPredictionButton").textContent = ["BTCUSDT","ETHUSDT"].includes(symbol) ? "START PAPER PREDICTION" : "CRYPTO ONLY · SELECT BTC OR ETH";
+    if (active && active.status === "SETTLED") {
+      $("predictionStatus").textContent = active.result + " · " + active.direction + " · Entry " +
+        Number(active.entryPrice).toLocaleString("en-US", {maximumFractionDigits:8}) + " · Exit " +
+        Number(active.exitPrice).toLocaleString("en-US", {maximumFractionDigits:8}) + " · P/L " + formatUsd(active.pnl) +
+        ". Settlement uses the first server price check at or after expiry.";
+    } else {
+      $("predictionStatus").textContent = "Ready · paper-only · 100% profit payout on a correct prediction; stake lost on an incorrect prediction.";
+    }
+  }
+  const history = Array.isArray(account.history) ? account.history.slice(0,5) : [];
+  $("predictionHistory").textContent = history.length
+    ? "Recent: " + history.map(t => t.result + " " + t.symbol + " " + formatUsd(t.pnl)).join(" · ")
+    : "No settled predictions yet.";
+}
+async function refreshPredictionAccount() {
+  try {
+    const response = await fetch("/api/paper-predictions", {cache:"no-store"});
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Prediction account unavailable");
+    renderPredictionAccount(data);
+  } catch (error) {
+    $("predictionStatus").textContent = "PAPER PREDICTION SERVICE UNAVAILABLE · " + error.message;
+  }
+}
+async function startPaperPrediction() {
+  if (predictionRequestBusy) return;
+  if (!["BTCUSDT","ETHUSDT"].includes(symbol)) {
+    $("predictionStatus").textContent = "Gold and forex predictions are not enabled. Select BTC/USDT or ETH/USDT.";
+    return;
+  }
+  if (!updatePaperAmount()) {
+    $("predictionStatus").textContent = "Enter a valid stake from $1 to $1,000.";
+    return;
+  }
+  predictionRequestBusy = true;
+  $("startPredictionButton").disabled = true;
+  $("startPredictionButton").textContent = "STARTING…";
+  $("predictionStatus").textContent = "Fetching a fresh market price and starting paper prediction…";
+  try {
+    const response = await fetch("/api/paper-predictions", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        action:"start", symbol, direction:paperDirection, expiry:paperExpiry, amount:paperAmount
+      })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Could not start paper prediction");
+    renderPredictionAccount(data);
+    $("predictionStatus").textContent = "PAPER PREDICTION STARTED · " + paperDirection + " · " +
+      expiryLabels[paperExpiry] + " · Stake " + formatUsd(paperAmount) + ". No real-money order placed.";
+  } catch (error) {
+    $("predictionStatus").textContent = "NOT STARTED · " + error.message;
+  } finally {
+    predictionRequestBusy = false;
+    await refreshPredictionAccount();
+  }
+}
+$("startPredictionButton").addEventListener("click", startPaperPrediction);
+refreshPredictionAccount();
+predictionPollHandle = setInterval(refreshPredictionAccount, 2500);
+
 function updatePaperTradeControls() {
   $("manualModeButton").classList.toggle("active", paperExecutionMode === "MANUAL");
   $("autoModeButton").classList.toggle("active", paperExecutionMode === "AUTO");
@@ -791,8 +880,8 @@ function updatePaperTradeControls() {
     paperExecutionMode + " · " + paperDirection + " · $" + paperAmount.toFixed(2) +
     " stake · " + expiryLabels[paperExpiry] + " expiry selected. " +
     (amountValid
-      ? "Paper order placement remains locked until secure trade authorization is available."
-      : "Fix the amount before any paper order can be considered.");
+      ? "Prediction settlement is paper-only; no real-money orders are possible."
+      : "Fix the amount before starting a paper prediction.");
   $("tradeSignalStatus").textContent = paperExecutionMode === "AUTO"
     ? "AUTO SIGNAL mode checks the current crypto signal. It never submits an order; only BTC/USDT and ETH/USDT are supported by the current signal backend."
     : "MANUAL mode lets you select UP or DOWN. No order is submitted by changing these controls.";
