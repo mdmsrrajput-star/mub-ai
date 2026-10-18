@@ -684,40 +684,84 @@ async function refreshPaperAccount() {
     }
   }
 }
+function setMarketView(isGold) {
+  const chartPanel = $("chartTitle").closest(".panel");
+  const livePricePanel = $("priceLabel").closest(".panel");
+  const signalPanels = [
+    $("signalValue"), $("indicators"), $("signalReasons"),
+    $("signalConnection"), $("orderExecution")
+  ].filter(Boolean).map(el => el.closest(".panel"));
+  if (chartPanel) chartPanel.hidden = isGold;
+  if (livePricePanel) livePricePanel.hidden = isGold;
+  signalPanels.forEach(panel => { if (panel) panel.hidden = isGold; });
+  const controls = $("tradeControls");
+  if (controls) controls.hidden = isGold;
+  if (isGold) {
+    $("chartTitle").textContent = "Gold · XAU/USD";
+    $("chartStatus").textContent = "Gold spot feed only. A verified historical gold chart and gold signal engine are not connected.";
+    $("systemMessage").textContent = "Gold view selected. Gold spot pricing is separate; crypto charts, crypto signals, and crypto paper predictions are hidden because they do not represent gold.";
+  }
+}
+
 async function selectSymbol(next) {
-  if(next === "XAUUSD") {
+  if (next === "XAUUSD") {
+    if (changing) return;
+    changing = true;
     $("goldButton").classList.add("active");
     $("btcButton").classList.remove("active");
     $("ethButton").classList.remove("active");
+    setMarketView(true);
+    stopMarketSocket();
+    stopPriceSocket();
     $("priceLabel").textContent = "GOLD · XAU/USD · LIVE SPOT";
-    await refreshGoldFeed();
-    $("chartStatus").textContent = "Gold spot price feed selected above. Crypto chart and crypto-only signal engine are not gold data.";
-    $("systemMessage").textContent = "Gold spot feed is separate from crypto charts and the crypto paper executor. No gold orders are executed.";
+    $("livePrice").textContent = "Use gold spot card above";
+    $("priceChange").textContent = "Gold feed shown in the Gold spot card";
+    setStatus("connection", "GOLD FEED", true);
+    try {
+      await refreshGoldFeed();
+    } finally {
+      changing = false;
+    }
     return;
   }
-  if(symbol===next || changing) return;
+  if (!["BTCUSDT", "ETHUSDT"].includes(next) || (symbol === next && !$("chartTitle").closest(".panel").hidden) || changing) return;
+  changing = true;
+  symbol = next;
   $("goldButton").classList.remove("active");
-  changing=true;
-  symbol=next;
-
-  $("btcButton").classList.toggle("active",symbol==="BTCUSDT");
-  $("ethButton").classList.toggle("active",symbol==="ETHUSDT");
-  $("priceLabel").textContent=symbolLabel(symbol)+" · LIVE PRICE";
-  $("livePrice").textContent="Connecting...";
-  $("priceChange").textContent="24h change: --";
+  $("btcButton").classList.toggle("active", symbol === "BTCUSDT");
+  $("ethButton").classList.toggle("active", symbol === "ETHUSDT");
+  setMarketView(false);
+  $("chartTitle").textContent = symbolLabel(symbol) + " · " + timeframe;
+  $("priceLabel").textContent = symbolLabel(symbol) + " · LIVE PRICE";
+  $("livePrice").textContent = "Connecting...";
+  $("priceChange").textContent = "24h change: --";
+  $("signalValue").textContent = "LOADING...";
+  $("signalScore").textContent = "Updating for " + symbolLabel(symbol) + "...";
+  $("signalUpdated").textContent = "";
+  $("indicators").textContent = "Updating indicators...";
+  $("signalReasons").textContent = "Updating signal explanation...";
+  setStatus("connection", "SWITCHING MARKET…", false);
+  $("lastUpdate").textContent = "Loading " + symbolLabel(symbol) + " market data…";
 
   stopMarketSocket();
   stopPriceSocket();
 
   try {
+    // Update the live ticker and signal immediately while candle history loads.
+    const backgroundRefresh = Promise.allSettled([
+      connectPriceSocket(),
+      refresh24h(),
+      refreshSignal(),
+      refreshPaperAccount()
+    ]);
     await loadHistory();
     connectMarketSocket();
-    connectPriceSocket();
-    await refreshAll();
-  } catch(e) {
-    $("systemMessage").textContent="Symbol change failed: "+e.message;
+    await backgroundRefresh;
+    $("systemMessage").textContent = symbolLabel(symbol) + " selected. Chart, live price, indicators and signal are now set to this crypto market. Paper mode only; real orders remain disabled.";
+  } catch (e) {
+    $("systemMessage").textContent = "Market switch issue: " + e.message;
   } finally {
-    changing=false;
+    changing = false;
   }
 }
 
