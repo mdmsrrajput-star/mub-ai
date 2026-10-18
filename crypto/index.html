@@ -63,6 +63,26 @@ footer{text-align:center;padding:20px 12px}
     <button id="refreshButton">Refresh now</button>
   </div>
 
+  <div class="panel section" id="tradeControls">
+    <h2>Paper trading controls</h2>
+    <div class="label">Execution mode</div>
+    <div class="controls section" role="group" aria-label="Execution mode">
+      <button type="button" id="manualModeButton" class="active">MANUAL</button>
+      <button type="button" id="autoModeButton">AUTO SIGNAL</button>
+    </div>
+    <div class="label section">Paper direction</div>
+    <div class="controls section" role="group" aria-label="Paper direction">
+      <button type="button" id="upButton" class="active">▲ UP</button>
+      <button type="button" id="downButton">▼ DOWN</button>
+    </div>
+    <div class="note section" id="tradeModeStatus" aria-live="polite">
+      MANUAL · UP selected. Paper order placement remains locked until secure trade authorization is available.
+    </div>
+    <div class="note" id="tradeSignalStatus">
+      AUTO SIGNAL reads the crypto signal API; it does not place orders. Gold and forex signals are not enabled.
+    </div>
+  </div>
+
   <div class="grid section">
     <div class="panel" id="goldPanel">
       <div class="label">★ PRIORITY MARKET · GOLD SPOT (XAU/USD)</div>
@@ -690,6 +710,41 @@ async function changeTimeframe(tf) {
     changing=false;
   }
 }
+
+let paperExecutionMode = "MANUAL";
+let paperDirection = "UP";
+
+function updatePaperTradeControls() {
+  $("manualModeButton").classList.toggle("active", paperExecutionMode === "MANUAL");
+  $("autoModeButton").classList.toggle("active", paperExecutionMode === "AUTO");
+  $("upButton").classList.toggle("active", paperDirection === "UP");
+  $("downButton").classList.toggle("active", paperDirection === "DOWN");
+  $("tradeModeStatus").textContent =
+    paperExecutionMode + " · " + paperDirection +
+    " selected. Paper order placement remains locked until secure trade authorization is available.";
+  $("tradeSignalStatus").textContent = paperExecutionMode === "AUTO"
+    ? "AUTO SIGNAL mode checks the current crypto signal. It never submits an order; only BTC/USDT and ETH/USDT are supported by the current signal backend."
+    : "MANUAL mode lets you select UP or DOWN. No order is submitted by changing these controls.";
+}
+
+$("manualModeButton").addEventListener("click", () => {
+  paperExecutionMode = "MANUAL";
+  updatePaperTradeControls();
+});
+$("autoModeButton").addEventListener("click", () => {
+  paperExecutionMode = "AUTO";
+  updatePaperTradeControls();
+  refreshSignal();
+});
+$("upButton").addEventListener("click", () => {
+  paperDirection = "UP";
+  updatePaperTradeControls();
+});
+$("downButton").addEventListener("click", () => {
+  paperDirection = "DOWN";
+  updatePaperTradeControls();
+});
+updatePaperTradeControls();
 
 $("goldButton").addEventListener("click",()=>selectSymbol("XAUUSD"));
 $("btcButton").addEventListener("click",()=>selectSymbol("BTCUSDT"));
