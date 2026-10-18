@@ -252,8 +252,8 @@ export default async function handler(req, res) {
         ok: true,
         account,
         startingBalance: STARTING_BALANCE,
-      dailyLossLimit: DAILY_LOSS_LIMIT,
-      maxPositionNotional: MAX_POSITION_NOTIONAL
+        dailyLossLimit: DAILY_LOSS_LIMIT,
+        maxPositionNotional: MAX_POSITION_NOTIONAL
       });
     } catch (error) {
       console.error("Paper account GET failed:", error.message);
@@ -301,7 +301,13 @@ export default async function handler(req, res) {
 
     if (action === "status") {
       const account = await runLedger("status");
-      return send(res, 200, { ok: true, account });
+      return send(res, 200, {
+        ok: true,
+        account,
+        startingBalance: STARTING_BALANCE,
+        dailyLossLimit: DAILY_LOSS_LIMIT,
+        maxPositionNotional: MAX_POSITION_NOTIONAL
+      });
     }
 
     if (action === "reset") {
