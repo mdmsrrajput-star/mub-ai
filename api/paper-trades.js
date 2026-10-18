@@ -79,6 +79,17 @@ if action == "open" then
   if not notional or notional <= 0 then
     return redis.error_reply("Notional must be positive")
   end
+  local stopLoss = tonumber(p.stopLoss)
+  local takeProfit = tonumber(p.takeProfit)
+  if not stopLoss or not takeProfit then
+    return redis.error_reply("Both stopLoss and takeProfit are required")
+  end
+  if side == "LONG" and (stopLoss >= price or takeProfit <= price) then
+    return redis.error_reply("For LONG, stopLoss must be below entry and takeProfit above entry")
+  end
+  if side == "SHORT" and (stopLoss <= price or takeProfit >= price) then
+    return redis.error_reply("For SHORT, stopLoss must be above entry and takeProfit below entry")
+  end
   local maxNotional = tonumber(p.maxNotional) or 1000
   if notional > maxNotional then
     return redis.error_reply("Position notional exceeds the $1,000 paper-trading cap")
@@ -101,7 +112,9 @@ if action == "open" then
     quantity = notional / price,
     notional = notional,
     openFee = fee,
-    openedAt = p.timestamp or 0
+    openedAt = p.timestamp or 0,
+    stopLoss = tonumber(p.stopLoss),
+    takeProfit = tonumber(p.takeProfit)
   }
 
   table.insert(s.trades, {
@@ -299,6 +312,34 @@ export default async function handler(req, res) {
 
     const action = body.action;
 
+    if (action === "manage") {
+      const account = await runLedger("status");
+      const checked = [];
+      for (const symbol of ["BTCUSDT", "ETHUSDT"]) {
+        const position = account.positions?.[symbol];
+        if (!position) continue;
+        const price = await getPrice(symbol);
+        const stopHit = position.side === "LONG"
+          ? price <= Number(position.stopLoss)
+          : price >= Number(position.stopLoss);
+        const targetHit = position.side === "LONG"
+          ? price >= Number(position.takeProfit)
+          : price <= Number(position.takeProfit);
+        if (stopHit || targetHit) {
+          const updated = await runLedger("close", {
+            symbol, price, timestamp: Date.now(),
+            dailyLossLimit: DAILY_LOSS_LIMIT,
+            maxNotional: MAX_POSITION_NOTIONAL,
+            dayStart: Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())
+          });
+          checked.push({ symbol, closed: true, reason: stopHit ? "STOP_LOSS" : "TAKE_PROFIT", exitPrice: price, account: updated });
+        } else {
+          checked.push({ symbol, closed: false, price });
+        }
+      }
+      return send(res, 200, { ok: true, action: "manage", checked });
+    }
+
     if (action === "status") {
       const account = await runLedger("status");
       return send(res, 200, {
@@ -342,6 +383,8 @@ export default async function handler(req, res) {
       price,
       side: body.side || "LONG",
       notional: Number(body.notional),
+      stopLoss: Number(body.stopLoss),
+      takeProfit: Number(body.takeProfit),
       timestamp: Date.now(),
       dailyLossLimit: DAILY_LOSS_LIMIT,
       maxNotional: MAX_POSITION_NOTIONAL,
@@ -363,7 +406,7 @@ export default async function handler(req, res) {
 
     const message = error.message || "Unknown server error";
     const clientError =
-      /Unsupported symbol|valid price|positive|already open|Insufficient|No open position|Side must|Unsupported action|Daily realized loss limit|Position notional exceeds/i.test(message);
+      /Unsupported symbol|valid price|positive|already open|Insufficient|No open position|Side must|Unsupported action|Daily realized loss limit|Position notional exceeds|stopLoss|takeProfit|For LONG|For SHORT/i.test(message);
 
     return send(res, clientError ? 400 : 500, {
       ok: false,
