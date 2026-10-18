@@ -65,7 +65,7 @@ const LUA = `
 local raw = redis.call("GET", KEYS[1])
 local s
 if raw then s = cjson.decode(raw) else
- s = { balance = 10000, active = false, history = {} }
+ s = { balance = 10000, active = {}, history = {} }
 end
 if not s.history then s.history = {} end
 local action = ARGV[1]
@@ -82,8 +82,10 @@ if action == "start" then
   expiresAt = tonumber(p.now) + tonumber(p.duration), status = "PENDING",
   payoutRate = 1.0
  }
- redis.call("SET", KEYS[1], cjson.encode(s))
- return cjson.encode(s)
+ local encoded = cjson.encode(s)
+ if not encoded then return redis.error_reply("Could not encode paper prediction state") end
+ redis.call("SET", KEYS[1], encoded)
+ return encoded
 end
 if action == "settle" then
  if not s.active or s.active.status ~= "PENDING" then return cjson.encode(s) end
@@ -102,8 +104,10 @@ if action == "settle" then
  s.active.pnl = pnl
  table.insert(s.history, 1, s.active)
  while #s.history > 100 do table.remove(s.history) end
- redis.call("SET", KEYS[1], cjson.encode(s))
- return cjson.encode(s)
+ local encoded = cjson.encode(s)
+ if not encoded then return redis.error_reply("Could not encode settled prediction state") end
+ redis.call("SET", KEYS[1], encoded)
+ return encoded
 end
 return redis.error_reply("Unsupported action")
 `;
