@@ -65,7 +65,7 @@ const LUA = `
 local raw = redis.call("GET", KEYS[1])
 local s
 if raw then s = cjson.decode(raw) else
- s = { balance = 10000, active = cjson.null, history = {} }
+ s = { balance = 10000, active = false, history = {} }
 end
 if not s.history then s.history = {} end
 local action = ARGV[1]
