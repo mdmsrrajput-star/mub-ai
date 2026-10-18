@@ -75,19 +75,19 @@ footer{text-align:center;padding:20px 12px}
       <button type="button" id="upButton" class="active">▲ UP</button>
       <button type="button" id="downButton">▼ DOWN</button>
     </div>
-    <div class="label section">Paper position size (USD notional)</div>
+    <div class="label section">Paper stake (USD per UP/DOWN prediction)</div>
     <div class="controls section" role="group" aria-label="Paper position amount">
+      <button type="button" class="amountButton active" data-amount="1">$1</button>
+      <button type="button" class="amountButton" data-amount="2">$2</button>
+      <button type="button" class="amountButton" data-amount="5">$5</button>
+      <button type="button" class="amountButton" data-amount="10">$10</button>
       <button type="button" class="amountButton" data-amount="25">$25</button>
       <button type="button" class="amountButton" data-amount="50">$50</button>
-      <button type="button" class="amountButton active" data-amount="100">$100</button>
-      <button type="button" class="amountButton" data-amount="250">$250</button>
-      <button type="button" class="amountButton" data-amount="500">$500</button>
-      <button type="button" class="amountButton" data-amount="1000">$1,000 max</button>
     </div>
-    <label class="label section" for="customPaperAmount">Or enter a custom amount (maximum $1,000)</label>
-    <input id="customPaperAmount" type="number" min="25" max="1000" step="25" inputmode="decimal" value="100"
+    <label class="label section" for="customPaperAmount">Or enter a custom stake (minimum $1; maximum $1,000)</label>
+    <input id="customPaperAmount" type="number" min="1" max="1000" step="1" inputmode="decimal" value="1"
       style="width:100%;margin-top:7px;padding:11px;border:1px solid var(--border);border-radius:8px;background:#0b1020;color:var(--text);font-size:16px">
-    <div class="note section" id="amountGuidance" aria-live="polite">Selected: $100 notional. This is position size, not the amount you can lose. Actual risk depends on stop-loss distance and fees.</div>
+    <div class="note section" id="amountGuidance" aria-live="polite">Selected: $1 stake. At an 80% payout, a correct prediction would profit $0.80; an incorrect prediction would lose $1. This payout preview is not connected to execution.</div>
     <div class="note section" id="tradeModeStatus" aria-live="polite">
       MANUAL · UP selected. Paper order placement remains locked until secure trade authorization is available.
     </div>
@@ -726,15 +726,15 @@ async function changeTimeframe(tf) {
 
 let paperExecutionMode = "MANUAL";
 let paperDirection = "UP";
-let paperAmount = 100;
+let paperAmount = 1;
 
 function updatePaperAmount() {
   const field = $("customPaperAmount");
   const amount = Number(field.value);
-  const valid = Number.isFinite(amount) && amount >= 25 && amount <= 1000;
+  const valid = Number.isFinite(amount) && amount >= 1 && amount <= 1000;
   $("amountGuidance").textContent = valid
-    ? "Selected: $" + amount.toFixed(2) + " notional. This is position size, not the amount you can lose. Actual risk depends on stop-loss distance and fees."
-    : "Enter a paper position size from $25 to $1,000. Invalid amounts cannot be selected.";
+    ? "Stake: $" + amount.toFixed(2) + " · If correct: +$" + (amount * 0.8).toFixed(2) + " profit at 80% payout; if wrong: -$" + amount.toFixed(2) + ". Preview only; not connected to order execution."
+    : "Enter a paper stake from $1 to $1,000. Invalid amounts cannot be selected.";
   document.querySelectorAll(".amountButton").forEach(button => {
     button.classList.toggle("active", valid && Number(button.dataset.amount) === amount);
   });
@@ -762,7 +762,7 @@ function updatePaperTradeControls() {
   const amountValid = updatePaperAmount();
   $("tradeModeStatus").textContent =
     paperExecutionMode + " · " + paperDirection + " · $" + paperAmount.toFixed(2) +
-    " notional selected. " +
+    " stake selected. " +
     (amountValid
       ? "Paper order placement remains locked until secure trade authorization is available."
       : "Fix the amount before any paper order can be considered.");
