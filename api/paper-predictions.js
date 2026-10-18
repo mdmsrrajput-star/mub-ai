@@ -18,7 +18,15 @@ async function redisCommand(command) {
     body: JSON.stringify(command)
   });
   const data = await response.json().catch(() => null);
-  if (!response.ok || !data || data.error) throw new Error("Paper prediction storage request failed");
+  if (!response.ok || !data || data.error) {
+    // Preserve a safe server-side diagnostic so configuration and Redis errors
+    // can be distinguished from market-price failures in the dashboard response.
+    const detail = data && typeof data.error === "string"
+      ? data.error.slice(0, 180)
+      : `Storage provider returned HTTP ${response.status}`;
+    console.error("Paper prediction storage error:", detail);
+    throw new Error(`Paper prediction storage unavailable: ${detail}`);
+  }
   return data.result;
 }
 async function getPrice(symbol) {
