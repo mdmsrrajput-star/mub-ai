@@ -40,6 +40,24 @@ button.active{background:#304c80;border-color:var(--blue)}
 button:disabled{opacity:.5}
 #chart{height:330px;width:100%;margin-top:12px}
 .value{font-size:18px;font-weight:750;margin-top:8px;overflow-wrap:anywhere}
+.terminal-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;margin-top:12px}
+.terminal-card{grid-column:span 3;min-width:0;background:linear-gradient(145deg,#17233a,#111a2c);border:1px solid var(--border);border-radius:12px;padding:12px}
+.terminal-card.wide{grid-column:span 6}.terminal-card.full{grid-column:1/-1}
+.metric-value{font-size:clamp(16px,2.5vw,23px);font-weight:800;margin-top:8px;overflow-wrap:anywhere}
+.metric-sub{font-size:11px;color:var(--muted);margin-top:5px}
+.meter{height:7px;background:#26324a;border-radius:9px;overflow:hidden;margin-top:8px;display:flex}
+.meter-buy{background:var(--green);height:100%}.meter-sell{background:var(--red);height:100%}
+.depth-list{display:grid;gap:5px;margin-top:9px}
+.depth-row{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;font-size:11px;font-variant-numeric:tabular-nums}
+.depth-side{height:18px;position:relative;background:#101829;border-radius:4px;overflow:hidden}
+.depth-side span{display:block;height:100%;opacity:.42}
+.depth-side.bid span{background:var(--green);margin-left:auto}.depth-side.ask span{background:var(--red)}
+.depth-side em{position:absolute;inset:0;padding:2px 4px;font-style:normal}
+.kpi-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+.kpi{background:#10182a;border:1px solid var(--border);border-radius:9px;padding:10px;min-width:0}
+.kpi .label{font-size:10px}.kpi strong{display:block;font-size:14px;margin-top:6px;overflow-wrap:anywhere}
+@media(max-width:650px){.terminal-card{grid-column:span 6}.terminal-card.wide{grid-column:span 12}.kpi-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:380px){.terminal-card{grid-column:span 12}.kpi-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .banner{padding:11px;border:1px solid #236d5a;background:#102c2a;
 color:#70efc4;border-radius:10px;font-size:12px;font-weight:750;margin-bottom:12px}
 footer{text-align:center;padding:20px 12px}
@@ -134,6 +152,33 @@ footer{text-align:center;padding:20px 12px}
     </div>
   </div>
 
+  <div class="kpi-strip" id="marketKpis">
+    <div class="kpi"><div class="label">24H HIGH</div><strong id="kpiHigh">—</strong></div>
+    <div class="kpi"><div class="label">24H LOW</div><strong id="kpiLow">—</strong></div>
+    <div class="kpi"><div class="label">24H VOLUME</div><strong id="kpiVolume">—</strong></div>
+    <div class="kpi"><div class="label">BID / ASK SPREAD</div><strong id="kpiSpread">—</strong></div>
+  </div>
+  <div class="terminal-grid" id="advancedTerminal">
+    <div class="terminal-card wide" id="depthPanel">
+      <div class="label">LIVE ORDER BOOK · TOP 10 LEVELS</div>
+      <div class="metric-value" id="depthImbalance">Connecting…</div>
+      <div class="metric-sub" id="depthSummary">Waiting for public market depth</div>
+      <div class="meter"><div class="meter-buy" id="bidMeter" style="width:50%"></div><div class="meter-sell" id="askMeter" style="width:50%"></div></div>
+      <div class="depth-list" id="depthRows"></div>
+      <div class="metric-sub">Public exchange depth snapshot; not broker execution liquidity.</div>
+    </div>
+    <div class="terminal-card wide" id="marketFlowPanel">
+      <div class="label">MARKET STRUCTURE · SELECTED SYMBOL</div>
+      <div class="metric-value" id="structureValue">Calculating…</div>
+      <div class="metric-sub" id="structureText">Trend and candle statistics update with the selected market.</div>
+      <div class="meter"><div class="meter-buy" id="trendMeter" style="width:50%"></div><div class="meter-sell" id="trendSellMeter" style="width:50%"></div></div>
+      <div class="kpi-strip">
+        <div class="kpi"><div class="label">LAST CANDLE</div><strong id="lastCandleMove">—</strong></div>
+        <div class="kpi"><div class="label">20-CANDLE RANGE</div><strong id="candleRange">—</strong></div>
+      </div>
+    </div>
+  </div>
+
   <div class="panel section">
     <h2 id="chartTitle">BTC / USDT · 5m</h2>
     <div class="controls" id="timeframes">
@@ -193,7 +238,7 @@ footer{text-align:center;padding:20px 12px}
       Initializing public market data and signal engine...
     </div>
     <div class="note" style="margin-top:8px">
-      Gold spot uses a separate public feed and reports freshness. Forex/gold signals and order execution are not enabled. Crypto signals are experimental and are not guaranteed profitable.
+      Order-book panels show public exchange snapshots and candle statistics, not guaranteed future direction. Gold spot uses a separate feed. Real order execution remains disabled.
     </div>
   </div>
 </main>
@@ -223,12 +268,52 @@ let currentCustom = null;
 let customMs = 0;
 let lastVolumeTime = 0;
 let changing = false;
+let analyticsGeneration = 0;
+let lastCandlesForAnalytics = [];
+let depthTimer = null;
 let refreshingSignal = false;
 
 const $ = id => document.getElementById(id);
 
 function symbolLabel(s) {
   return s === "BTCUSDT" ? "BTC / USDT" : "ETH / USDT";
+}
+function compactNumber(n) {
+  return Number(n).toLocaleString("en-US",{notation:"compact",maximumFractionDigits:2});
+}
+function renderDepth(data, expectedSymbol) {
+  if(expectedSymbol !== symbol) return;
+  const bids=(data.bids||[]).slice(0,10).map(x=>({price:Number(x[0]),qty:Number(x[1]),side:"BID"}));
+  const asks=(data.asks||[]).slice(0,10).map(x=>({price:Number(x[0]),qty:Number(x[1]),side:"ASK"}));
+  if(!bids.length||!asks.length) throw new Error("Order book returned no levels");
+  const bidQty=bids.reduce((s,x)=>s+x.qty,0), askQty=asks.reduce((s,x)=>s+x.qty,0);
+  const total=bidQty+askQty, bidPct=total?bidQty/total*100:50, askPct=100-bidPct;
+  $("depthImbalance").textContent=(bidPct>=50?"BUY-SIDE DEPTH ":"SELL-SIDE DEPTH ")+Math.abs(bidPct-50)*2 .toFixed?.(1);
+  $("depthImbalance").textContent=(bidPct>=50?"Bid depth ":"Ask depth ")+Math.abs(bidPct-askPct).toFixed(1)+"% imbalance";
+  $("depthSummary").textContent="Bid qty "+bidQty.toFixed(4)+" · Ask qty "+askQty.toFixed(4)+" · snapshot, not a trade signal";
+  $("bidMeter").style.width=bidPct+"%"; $("askMeter").style.width=askPct+"%";
+  const rows=[];
+  for(let i=0;i<Math.min(5,bids.length,asks.length);i++){
+    const b=bids[i],a=asks[i],max=Math.max(b.qty,a.qty,1e-12);
+    rows.push('<div class="depth-row"><div class="depth-side bid"><span style="width:'+Math.min(100,b.qty/max*100)+'%"></span><em>'+b.price.toLocaleString("en-US",{maximumFractionDigits:8})+'</em></div><strong>'+i+'</strong><div class="depth-side ask"><span style="width:'+Math.min(100,a.qty/max*100)+'%"></span><em>'+a.price.toLocaleString("en-US",{maximumFractionDigits:8})+'</em></div></div>');
+  }
+  $("depthRows").innerHTML=rows.join("");
+  $("kpiSpread").textContent=((asks[0].price-bids[0].price)/bids[0].price*100).toFixed(3)+"%";
+}
+function renderCandleAnalytics(candles, expectedSymbol) {
+  if(expectedSymbol !== symbol || !candles.length) return;
+  lastCandlesForAnalytics=candles;
+  const last=candles[candles.length-1], recent=candles.slice(-20);
+  const change=(last.close-last.open)/last.open*100;
+  const high=Math.max(...recent.map(c=>c.high)),low=Math.min(...recent.map(c=>c.low));
+  $("lastCandleMove").textContent=(change>=0?"+":"")+change.toFixed(3)+"%";
+  $("lastCandleMove").className=change>=0?"positive":"negative";
+  $("candleRange").textContent=((high-low)/low*100).toFixed(2)+"%";
+  const ups=recent.filter(c=>c.close>=c.open).length,pct=ups/recent.length*100;
+  $("structureValue").textContent=pct>=60?"Bullish candle bias":pct<=40?"Bearish candle bias":"Mixed / range-bound";
+  $("structureValue").style.color=pct>=60?"var(--green)":pct<=40?"var(--red)":"var(--blue)";
+  $("structureText").textContent=ups+" of "+recent.length+" recent candles closed green. This is descriptive, not a prediction.";
+  $("trendMeter").style.width=pct+"%"; $("trendSellMeter").style.width=(100-pct)+"%";
 }
 
 async function refreshGoldFeed() {
@@ -421,6 +506,7 @@ async function loadHistory() {
   if(!candles.length) throw new Error("No candles returned");
   candleSeries.setData(candles);
   volumeSeries.setData(volumes);
+  renderCandleAnalytics(candles, symbol);
   chart.timeScale().fitContent();
   lastVolumeTime=volumes.length ? volumes[volumes.length-1].time : 0;
   $("chartStatus").textContent=timeframe+" · "+candles.length+
@@ -456,6 +542,8 @@ function handleTrade(msg) {
     time:c.time,open:c.open,high:c.high,low:c.low,close:c.close
   });
   updateVolume(c.time,c.volume,c.close>=c.open);
+  const base=lastCandlesForAnalytics.filter(x=>x.time!==c.time);
+  renderCandleAnalytics(base.concat([{time:c.time,open:c.open,high:c.high,low:c.low,close:c.close}]).slice(-200),symbol);
   $("chartStatus").textContent=timeframe+" · LIVE trades · "+
     new Date().toLocaleTimeString();
 }
@@ -470,6 +558,8 @@ function handleKline(msg) {
   };
   candleSeries.update(c);
   updateVolume(c.time,Number(k.v),c.close>=c.open);
+  const base=lastCandlesForAnalytics.filter(x=>x.time!==c.time);
+  renderCandleAnalytics(base.concat([c]).slice(-200),symbol);
   $("chartStatus").textContent=timeframe+" · "+
     (k.x?"CANDLE CLOSED":"LIVE CANDLE")+" · "+
     new Date().toLocaleTimeString();
@@ -555,7 +645,13 @@ async function connectPriceSocket() {
 }
 
 async function refresh24h() {
-  const d=await getJSON(API+"/ticker/24hr?symbol="+symbol);
+  const expectedSymbol=symbol;
+  const d=await getJSON(API+"/ticker/24hr?symbol="+expectedSymbol);
+  if(expectedSymbol!==symbol) return;
+  $("kpiHigh").textContent="$"+money(Number(d.highPrice));
+  $("kpiLow").textContent="$"+money(Number(d.lowPrice));
+  $("kpiVolume").textContent=compactNumber(Number(d.volume))+" "+(expectedSymbol==="BTCUSDT"?"BTC":"ETH");
+  refreshOrderBook(expectedSymbol).catch(e=>{if(expectedSymbol===symbol)$("depthSummary").textContent="Order book unavailable: "+e.message;});
   const n=Number(d.priceChangePercent);
   $("priceChange").textContent="24h change: "+(n>0?"+":"")+
     n.toFixed(2)+"%";
@@ -563,6 +659,12 @@ async function refresh24h() {
     (n>0?"positive":n<0?"negative":"");
 }
 
+async function refreshOrderBook(expectedSymbol=symbol) {
+  const generation=++analyticsGeneration;
+  const data=await getJSON(API+"/depth?symbol="+expectedSymbol+"&limit=10");
+  if(generation!==analyticsGeneration || expectedSymbol!==symbol) return;
+  renderDepth(data,expectedSymbol);
+}
 async function refreshSignal() {
   if(refreshingSignal) return;
   refreshingSignal=true;
@@ -701,6 +803,10 @@ function setMarketView(isGold) {
   signalPanels.forEach(panel => { if (panel) panel.hidden = isGold; });
   const controls = $("tradeControls");
   if (controls) controls.hidden = isGold;
+  const terminal = $("advancedTerminal");
+  const kpis = $("marketKpis");
+  if (terminal) terminal.hidden = isGold;
+  if (kpis) kpis.hidden = isGold;
   if (isGold) {
     $("chartTitle").textContent = "Gold · XAU/USD";
     $("chartStatus").textContent = "Gold spot feed only. A verified historical gold chart and gold signal engine are not connected.";
@@ -732,6 +838,10 @@ async function selectSymbol(next) {
   if (!["BTCUSDT", "ETHUSDT"].includes(next) || (symbol === next && !$("chartTitle").closest(".panel").hidden) || changing) return;
   changing = true;
   symbol = next;
+  analyticsGeneration++;
+  $("depthImbalance").textContent="Loading "+symbolLabel(symbol)+" order book…";
+  $("depthSummary").textContent="Switching market data…";
+  $("depthRows").innerHTML="";
   $("goldButton").classList.remove("active");
   $("btcButton").classList.toggle("active", symbol === "BTCUSDT");
   $("ethButton").classList.toggle("active", symbol === "ETHUSDT");
@@ -971,6 +1081,7 @@ async function start() {
     connectMarketSocket();
     connectPriceSocket();
     await refreshAll();
+    setMarketView(false);
     $("systemMessage").textContent=
       "Dashboard initialized. Signal API connected where available. "+
       "Real order execution remains disabled.";
@@ -984,6 +1095,7 @@ refreshGoldFeed();
 setInterval(()=>refreshGoldFeed().catch(()=>{}),120000);
 start();
 setInterval(()=>refresh24h().catch(()=>{}),60000);
+setInterval(()=>refreshOrderBook().catch(()=>{}),10000);
 setInterval(refreshSignal,300000);
 </script>
 </body>
