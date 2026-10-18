@@ -2,6 +2,8 @@
 const ACCOUNT_KEY = "mub:paper:account:v1";
 const STARTING_BALANCE = 10000;
 const FEE_RATE = 0.001; // 0.1% per transaction
+const DAILY_LOSS_LIMIT = STARTING_BALANCE * 0.02;
+const MAX_POSITION_NOTIONAL = STARTING_BALANCE * 0.10; // $1,000 maximum per simulated position
 
 const LUA_SCRIPT = `
 local raw = redis.call("GET", KEYS[1])
@@ -57,12 +59,40 @@ if not price or price <= 0 then
 end
 
 if action == "open" then
+  -- This guard limits daily realized losses only; it does not cap unrealized losses.
+  local dailyPnl = 0
+  local dayStart = tonumber(p.dayStart) or 0
+  for _, trade in ipairs(s.trades) do
+    if trade.action == "CLOSE" and tonumber(trade.timestamp or 0) >= dayStart then
+      dailyPnl = dailyPnl + (tonumber(trade.netPnl) or 0)
+    end
+  end
+  local dailyLossLimit = tonumber(p.dailyLossLimit) or 200
+  if dailyPnl <= -dailyLossLimit then
+    return redis.error_reply("Daily realized loss limit reached")
+  end
+
   if side ~= "LONG" and side ~= "SHORT" then
     return redis.error_reply("Side must be LONG or SHORT")
   end
 
   if not notional or notional <= 0 then
     return redis.error_reply("Notional must be positive")
+  end
+  local stopLoss = tonumber(p.stopLoss)
+  local takeProfit = tonumber(p.takeProfit)
+  if not stopLoss or not takeProfit then
+    return redis.error_reply("Both stopLoss and takeProfit are required")
+  end
+  if side == "LONG" and (stopLoss >= price or takeProfit <= price) then
+    return redis.error_reply("For LONG, stopLoss must be below entry and takeProfit above entry")
+  end
+  if side == "SHORT" and (stopLoss <= price or takeProfit >= price) then
+    return redis.error_reply("For SHORT, stopLoss must be above entry and takeProfit below entry")
+  end
+  local maxNotional = tonumber(p.maxNotional) or 1000
+  if notional > maxNotional then
+    return redis.error_reply("Position notional exceeds the $1,000 paper-trading cap")
   end
 
   if s.positions[symbol] then
@@ -82,7 +112,9 @@ if action == "open" then
     quantity = notional / price,
     notional = notional,
     openFee = fee,
-    openedAt = p.timestamp or 0
+    openedAt = p.timestamp or 0,
+    stopLoss = tonumber(p.stopLoss),
+    takeProfit = tonumber(p.takeProfit)
   }
 
   table.insert(s.trades, {
@@ -232,7 +264,9 @@ export default async function handler(req, res) {
       return send(res, 200, {
         ok: true,
         account,
-        startingBalance: STARTING_BALANCE
+        startingBalance: STARTING_BALANCE,
+        dailyLossLimit: DAILY_LOSS_LIMIT,
+        maxPositionNotional: MAX_POSITION_NOTIONAL
       });
     } catch (error) {
       console.error("Paper account GET failed:", error.message);
@@ -278,9 +312,43 @@ export default async function handler(req, res) {
 
     const action = body.action;
 
+    if (action === "manage") {
+      const account = await runLedger("status");
+      const checked = [];
+      for (const symbol of ["BTCUSDT", "ETHUSDT"]) {
+        const position = account.positions?.[symbol];
+        if (!position) continue;
+        const price = await getPrice(symbol);
+        const stopHit = position.side === "LONG"
+          ? price <= Number(position.stopLoss)
+          : price >= Number(position.stopLoss);
+        const targetHit = position.side === "LONG"
+          ? price >= Number(position.takeProfit)
+          : price <= Number(position.takeProfit);
+        if (stopHit || targetHit) {
+          const updated = await runLedger("close", {
+            symbol, price, timestamp: Date.now(),
+            dailyLossLimit: DAILY_LOSS_LIMIT,
+            maxNotional: MAX_POSITION_NOTIONAL,
+            dayStart: Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())
+          });
+          checked.push({ symbol, closed: true, reason: stopHit ? "STOP_LOSS" : "TAKE_PROFIT", exitPrice: price, account: updated });
+        } else {
+          checked.push({ symbol, closed: false, price });
+        }
+      }
+      return send(res, 200, { ok: true, action: "manage", checked });
+    }
+
     if (action === "status") {
       const account = await runLedger("status");
-      return send(res, 200, { ok: true, account });
+      return send(res, 200, {
+        ok: true,
+        account,
+        startingBalance: STARTING_BALANCE,
+        dailyLossLimit: DAILY_LOSS_LIMIT,
+        maxPositionNotional: MAX_POSITION_NOTIONAL
+      });
     }
 
     if (action === "reset") {
@@ -315,7 +383,15 @@ export default async function handler(req, res) {
       price,
       side: body.side || "LONG",
       notional: Number(body.notional),
-      timestamp: Date.now()
+      stopLoss: Number(body.stopLoss),
+      takeProfit: Number(body.takeProfit),
+      timestamp: Date.now(),
+      dailyLossLimit: DAILY_LOSS_LIMIT,
+      maxNotional: MAX_POSITION_NOTIONAL,
+      dayStart: (() => {
+        const now = new Date();
+        return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      })()
     };
 
     const account = await runLedger(action, payload);
@@ -330,7 +406,7 @@ export default async function handler(req, res) {
 
     const message = error.message || "Unknown server error";
     const clientError =
-      /Unsupported symbol|valid price|positive|already open|Insufficient|No open position|Side must|Unsupported action/i.test(message);
+      /Unsupported symbol|valid price|positive|already open|Insufficient|No open position|Side must|Unsupported action|Daily realized loss limit|Position notional exceeds|stopLoss|takeProfit|For LONG|For SHORT/i.test(message);
 
     return send(res, clientError ? 400 : 500, {
       ok: false,
