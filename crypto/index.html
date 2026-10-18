@@ -50,14 +50,14 @@ footer{text-align:center;padding:20px 12px}
 <body>
 <header>
   <div class="brand">MuB Market Intelligence</div>
-  <div class="sub">Gold-first market monitor · Forex & crypto · Paper trading</div>
+  <div class="sub">Market monitor · Forex & crypto · Paper trading</div>
 </header>
 
 <main>
   <div class="banner">PAPER MODE ACTIVE · REAL ORDER EXECUTION DISABLED</div>
 
   <div class="controls section">
-    <button class="active" id="goldButton">★ GOLD · XAU/USD</button>
+    <button class="active" id="goldButton">GOLD · XAU/USD</button>
     <button id="btcButton">BTC / USDT</button>
     <button id="ethButton">ETH / USDT</button>
     <button id="refreshButton">Refresh now</button>
@@ -115,7 +115,7 @@ footer{text-align:center;padding:20px 12px}
 
   <div class="grid section">
     <div class="panel" id="goldPanel">
-      <div class="label">★ PRIORITY MARKET · GOLD SPOT (XAU/USD)</div>
+      <div class="label">GOLD SPOT (XAU/USD)</div>
       <div class="price" id="goldPrice">Loading verified gold feed…</div>
       <div class="change" id="goldFreshness">Connecting to gold data provider…</div>
       <div class="note">Indicative spot price per troy ounce; not a broker execution quote.</div>
@@ -689,10 +689,10 @@ async function selectSymbol(next) {
     $("goldButton").classList.add("active");
     $("btcButton").classList.remove("active");
     $("ethButton").classList.remove("active");
-    $("priceLabel").textContent = "★ GOLD · XAU/USD · LIVE SPOT";
+    $("priceLabel").textContent = "GOLD · XAU/USD · LIVE SPOT";
     await refreshGoldFeed();
     $("chartStatus").textContent = "Gold spot price feed selected above. Crypto chart and crypto-only signal engine are not gold data.";
-    $("systemMessage").textContent = "Gold is the priority market. Spot feed is separate from crypto charts and the crypto paper executor. No gold orders are executed.";
+    $("systemMessage").textContent = "Gold spot feed is separate from crypto charts and the crypto paper executor. No gold orders are executed.";
     return;
   }
   if(symbol===next || changing) return;
