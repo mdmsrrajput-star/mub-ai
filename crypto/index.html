@@ -133,6 +133,14 @@ footer{text-align:center;padding:20px 12px}
     </div>
   </div>
 
+  <div class="panel section" id="predictionTradeHistoryPanel">
+    <div class="label">UP / DOWN prediction trade history</div>
+    <div class="note">Latest settled paper predictions, including entry/exit prices and profit/loss.</div>
+    <div id="predictionTradeHistoryList" class="section">
+      <div class="note">Loading prediction history…</div>
+    </div>
+  </div>
+
   <div class="grid section">
     <div class="panel" id="goldPanel">
       <div class="label">GOLD SPOT (XAU/USD)</div>
@@ -1014,10 +1022,49 @@ function renderPredictionAccount(data) {
       $("predictionStatus").textContent = "Ready · paper-only · 100% profit payout on a correct prediction; stake lost on an incorrect prediction.";
     }
   }
-  const history = Array.isArray(account.history) ? account.history.slice(0,5) : [];
+  const history = Array.isArray(account.history) ? account.history : [];
   $("predictionHistory").textContent = history.length
-    ? "Recent: " + history.map(t => t.result + " " + t.symbol + " " + formatUsd(t.pnl)).join(" · ")
+    ? history.length + " settled prediction(s) saved. Full recent history is shown below."
     : "No settled predictions yet.";
+  const list = $("predictionTradeHistoryList");
+  list.replaceChildren();
+  if (!history.length) {
+    const empty = document.createElement("div");
+    empty.className = "note";
+    empty.textContent = "No settled paper predictions yet. Completed predictions will appear here.";
+    list.appendChild(empty);
+    return;
+  }
+  history.slice(0,20).forEach(t => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 0;border-bottom:1px solid var(--border)";
+    const left = document.createElement("div");
+    const right = document.createElement("div");
+    right.style.textAlign = "right";
+    const title = document.createElement("div");
+    title.style.fontWeight = "700";
+    title.textContent = (t.result || "SETTLED") + " · " + (t.symbol || "");
+    title.style.color = t.result === "WIN" ? "var(--green)" : t.result === "LOSS" ? "var(--red)" : "var(--text)";
+    const detail = document.createElement("div");
+    detail.className = "note";
+    detail.textContent = (t.direction || "") + " · Stake " + formatUsd(t.stake) +
+      " · " + (t.expiry || "");
+    const pnl = document.createElement("div");
+    pnl.style.fontWeight = "700";
+    pnl.style.color = Number(t.pnl) > 0 ? "var(--green)" : Number(t.pnl) < 0 ? "var(--red)" : "var(--text)";
+    pnl.textContent = (Number(t.pnl) > 0 ? "+" : "") + formatUsd(t.pnl);
+    const prices = document.createElement("div");
+    prices.className = "note";
+    prices.textContent = "Entry " + Number(t.entryPrice).toLocaleString("en-US",{maximumFractionDigits:8}) +
+      " → Exit " + Number(t.exitPrice).toLocaleString("en-US",{maximumFractionDigits:8});
+    const time = document.createElement("div");
+    time.className = "note";
+    time.textContent = t.settledAt ? new Date(Number(t.settledAt)).toLocaleString() : "";
+    left.append(title, detail, prices);
+    right.append(pnl, time);
+    row.append(left, right);
+    list.appendChild(row);
+  });
 }
 async function refreshPredictionAccount() {
   try {
@@ -1134,7 +1181,7 @@ setInterval(()=>refreshGoldFeed().catch(()=>{}),120000);
 start();
 setInterval(()=>refresh24h().catch(()=>{}),60000);
 setInterval(()=>refreshOrderBook().catch(()=>{}),10000);
-setInterval(refreshSignal,300000);
+setInterval(refreshSignal,60000);
 </script>
 </body>
   </html>
