@@ -87,7 +87,7 @@ footer{text-align:center;padding:20px 12px}
     <label class="label section" for="customPaperAmount">Or enter a custom stake (minimum $1; maximum $1,000)</label>
     <input id="customPaperAmount" type="number" min="1" max="1000" step="1" inputmode="decimal" value="1"
       style="width:100%;margin-top:7px;padding:11px;border:1px solid var(--border);border-radius:8px;background:#0b1020;color:var(--text);font-size:16px">
-    <div class="note section" id="amountGuidance" aria-live="polite">Selected: $1 stake. At an 80% payout, a correct prediction would profit $0.80; an incorrect prediction would lose $1. This payout preview is not connected to execution.</div>
+    <div class="note section" id="amountGuidance" aria-live="polite">Selected: $1 stake. At an 100% payout, a correct prediction would profit $0.80; an incorrect prediction would lose $1. This payout preview is not connected to execution.</div>
     <div class="note section" id="tradeModeStatus" aria-live="polite">
       MANUAL · UP selected. Paper order placement remains locked until secure trade authorization is available.
     </div>
@@ -733,7 +733,7 @@ function updatePaperAmount() {
   const amount = Number(field.value);
   const valid = Number.isFinite(amount) && amount >= 1 && amount <= 1000;
   $("amountGuidance").textContent = valid
-    ? "Stake: $" + amount.toFixed(2) + " · If correct: +$" + (amount * 0.8).toFixed(2) + " profit at 80% payout; if wrong: -$" + amount.toFixed(2) + ". Preview only; not connected to order execution."
+    ? "Stake: $" + amount.toFixed(2) + " · If correct: +$" + (amount * 1.0).toFixed(2) + " profit at 100% payout; if wrong: -$" + amount.toFixed(2) + ". Preview only; not connected to order execution."
     : "Enter a paper stake from $1 to $1,000. Invalid amounts cannot be selected.";
   document.querySelectorAll(".amountButton").forEach(button => {
     button.classList.toggle("active", valid && Number(button.dataset.amount) === amount);
