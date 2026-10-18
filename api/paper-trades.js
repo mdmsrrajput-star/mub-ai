@@ -3,6 +3,7 @@ const ACCOUNT_KEY = "mub:paper:account:v1";
 const STARTING_BALANCE = 10000;
 const FEE_RATE = 0.001; // 0.1% per transaction
 const DAILY_LOSS_LIMIT = STARTING_BALANCE * 0.02;
+const MAX_POSITION_NOTIONAL = STARTING_BALANCE * 0.10; // $1,000 maximum per simulated position
 
 const LUA_SCRIPT = `
 local raw = redis.call("GET", KEYS[1])
@@ -77,6 +78,10 @@ if action == "open" then
 
   if not notional or notional <= 0 then
     return redis.error_reply("Notional must be positive")
+  end
+  local maxNotional = tonumber(p.maxNotional) or 1000
+  if notional > maxNotional then
+    return redis.error_reply("Position notional exceeds the $1,000 paper-trading cap")
   end
 
   if s.positions[symbol] then
@@ -246,7 +251,9 @@ export default async function handler(req, res) {
       return send(res, 200, {
         ok: true,
         account,
-        startingBalance: STARTING_BALANCE
+        startingBalance: STARTING_BALANCE,
+      dailyLossLimit: DAILY_LOSS_LIMIT,
+      maxPositionNotional: MAX_POSITION_NOTIONAL
       });
     } catch (error) {
       console.error("Paper account GET failed:", error.message);
@@ -331,6 +338,7 @@ export default async function handler(req, res) {
       notional: Number(body.notional),
       timestamp: Date.now(),
       dailyLossLimit: DAILY_LOSS_LIMIT,
+      maxNotional: MAX_POSITION_NOTIONAL,
       dayStart: (() => {
         const now = new Date();
         return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
@@ -349,7 +357,7 @@ export default async function handler(req, res) {
 
     const message = error.message || "Unknown server error";
     const clientError =
-      /Unsupported symbol|valid price|positive|already open|Insufficient|No open position|Side must|Unsupported action|Daily realized loss limit/i.test(message);
+      /Unsupported symbol|valid price|positive|already open|Insufficient|No open position|Side must|Unsupported action|Daily realized loss limit|Position notional exceeds/i.test(message);
 
     return send(res, clientError ? 400 : 500, {
       ok: false,
