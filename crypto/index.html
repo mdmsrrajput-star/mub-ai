@@ -687,6 +687,9 @@ async function refreshPaperAccount() {
   }
 }
 function setMarketView(isGold) {
+  // Show only the selected market's own price card and market-specific dashboard.
+  const goldPanel = $("goldPanel");
+  if (goldPanel) goldPanel.hidden = !isGold;
   const chartPanel = $("chartTitle").closest(".panel");
   const livePricePanel = $("priceLabel").closest(".panel");
   const signalPanels = [
