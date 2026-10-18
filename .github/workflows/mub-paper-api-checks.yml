@@ -1,0 +1,22 @@
+name: MuB paper API checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, mub-paper-risk-controls]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check paper-trading API syntax
+        run: node --check api/paper-trades.js
+      - name: Check signal API syntax
+        run: node --check api/crypto-signal.js
