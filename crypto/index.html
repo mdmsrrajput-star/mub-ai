@@ -161,13 +161,13 @@ footer{text-align:center;padding:20px 12px}
     <h2>Select market</h2>
     <div class="grid">
       <div><label class="label" for="metalsSelect">METALS</label><select id="metalsSelect" style="width:100%;padding:11px;border-radius:8px;background:#0b1020;color:var(--text);border:1px solid var(--border)">
-        <option value="XAUUSD">Gold · XAU/USD (spot view)</option><option value="XAGUSD">Silver · XAG/USD</option>
+        <option value="" selected disabled>Choose a metal…</option><option value="XAUUSD">Gold · XAU/USD (spot view)</option><option value="XAGUSD">Silver · XAG/USD</option>
       </select></div>
       <div><label class="label" for="cryptoSelect">CRYPTO</label><select id="cryptoSelect" style="width:100%;padding:11px;border-radius:8px;background:#0b1020;color:var(--text);border:1px solid var(--border)">
-        <option value="BTCUSDT">Bitcoin · BTC/USDT</option><option value="ETHUSDT">Ethereum · ETH/USDT</option><option value="BNBUSDT">BNB/USDT</option><option value="SOLUSDT">Solana · SOL/USDT</option><option value="XRPUSDT">XRP/USDT</option><option value="ADAUSDT">Cardano · ADA/USDT</option><option value="DOGEUSDT">Dogecoin · DOGE/USDT</option>
+        <option value="" selected disabled>Choose crypto…</option><option value="BTCUSDT">Bitcoin · BTC/USDT</option><option value="ETHUSDT">Ethereum · ETH/USDT</option><option value="BNBUSDT">BNB/USDT</option><option value="SOLUSDT">Solana · SOL/USDT</option><option value="XRPUSDT">XRP/USDT</option><option value="ADAUSDT">Cardano · ADA/USDT</option><option value="DOGEUSDT">Dogecoin · DOGE/USDT</option>
       </select></div>
       <div><label class="label" for="forexSelect">FOREX</label><select id="forexSelect" style="width:100%;padding:11px;border-radius:8px;background:#0b1020;color:var(--text);border:1px solid var(--border)">
-        <option value="EURUSD">EUR/USD</option><option value="GBPUSD">GBP/USD</option><option value="USDJPY">USD/JPY</option><option value="AUDUSD">AUD/USD</option><option value="USDCAD">USD/CAD</option><option value="USDCHF">USD/CHF</option><option value="NZDUSD">NZD/USD</option><option value="EURJPY">EUR/JPY</option><option value="GBPJPY">GBP/JPY</option>
+        <option value="" selected disabled>Choose forex pair…</option><option value="EURUSD">EUR/USD</option><option value="GBPUSD">GBP/USD</option><option value="USDJPY">USD/JPY</option><option value="AUDUSD">AUD/USD</option><option value="USDCAD">USD/CAD</option><option value="USDCHF">USD/CHF</option><option value="NZDUSD">NZD/USD</option><option value="EURJPY">EUR/JPY</option><option value="GBPJPY">GBP/JPY</option>
       </select></div>
     </div>
     <div class="controls section"><button id="selectMarketButton" class="active">OPEN SELECTED MARKET</button><button id="refreshButton">Refresh now</button></div>
@@ -1487,7 +1487,7 @@ $("downButton").addEventListener("click", () => {
 updatePaperTradeControls();
 
 let selectedMarketCategory = "cryptoSelect";
-["metalsSelect","cryptoSelect","forexSelect"].forEach(id => $(id).addEventListener("change", () => { selectedMarketCategory = id; }));
+["metalsSelect","cryptoSelect","forexSelect"].forEach(id => $(id).addEventListener("change", () => { selectedMarketCategory = id; selectSymbol($(id).value); }));
 $("selectMarketButton").addEventListener("click", () => selectSymbol($(selectedMarketCategory).value));
 $("refreshButton").addEventListener("click",refreshAll);
 
