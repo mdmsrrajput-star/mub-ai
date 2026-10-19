@@ -134,10 +134,16 @@ footer{text-align:center;padding:20px 12px}
   </div>
 
   <div class="panel section" id="predictionTradeHistoryPanel">
-    <div class="label">UP / DOWN prediction trade history</div>
-    <div class="note">Latest settled paper predictions, including entry/exit prices and profit/loss.</div>
-    <div id="predictionTradeHistoryList" class="section">
-      <div class="note">Loading prediction history…</div>
+    <button type="button" id="predictionHistoryToggle" aria-expanded="false" aria-controls="predictionHistoryDropdown"
+      style="width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left">
+      <span>PAST PREDICTIONS <span id="predictionHistoryCount" class="note">· loading</span></span>
+      <span id="predictionHistoryChevron" aria-hidden="true">▾</span>
+    </button>
+    <div class="note">Tap to open settled UP / DOWN paper predictions, including entry/exit prices and P/L.</div>
+    <div id="predictionHistoryDropdown" class="section" hidden>
+      <div id="predictionTradeHistoryList">
+        <div class="note">Loading prediction history…</div>
+      </div>
     </div>
   </div>
 
@@ -1033,8 +1039,9 @@ function renderPredictionAccount(data) {
   }
   const history = Array.isArray(account.history) ? account.history : [];
   $("predictionHistory").textContent = history.length
-    ? history.length + " settled prediction(s) saved. Full recent history is shown below."
+    ? history.length + " settled prediction(s) saved."
     : "No settled predictions yet.";
+  $("predictionHistoryCount").textContent = "· " + history.length + " settled";
   const list = $("predictionTradeHistoryList");
   list.replaceChildren();
   if (!history.length) {
@@ -1075,6 +1082,14 @@ function renderPredictionAccount(data) {
     list.appendChild(row);
   });
 }
+$("predictionHistoryToggle").addEventListener("click", () => {
+  const panel = $("predictionHistoryDropdown");
+  const opening = panel.hidden;
+  panel.hidden = !opening;
+  $("predictionHistoryToggle").setAttribute("aria-expanded", String(opening));
+  $("predictionHistoryChevron").textContent = opening ? "▴" : "▾";
+});
+
 async function refreshPredictionAccount() {
   try {
     const response = await fetch("/api/paper-predictions", {cache:"no-store"});
