@@ -175,7 +175,7 @@ export default async function handler(req, res) {
     const direction = String(body.direction || "").toUpperCase();
     const expiry = String(body.expiry || "1m");
     const amount = Number(body.amount ?? 1);
-    if (!ALLOWED_SYMBOLS.includes(symbol)) return send(res, 400, { ok: false, error: "Only BTC/USDT and ETH/USDT are supported; gold and forex predictions are disabled" });
+    if (!ALLOWED_SYMBOLS.includes(symbol)) return send(res, 400, { ok: false, error: "Supported symbols: BTCUSDT, ETHUSDT, EURUSD, GBPUSD. Gold predictions remain disabled." });
     if (!["UP", "DOWN"].includes(direction)) return send(res, 400, { ok: false, error: "Direction must be UP or DOWN" });
     if (!Object.prototype.hasOwnProperty.call(EXPIRIES, expiry)) return send(res, 400, { ok: false, error: "Unsupported expiry" });
     if (!Number.isFinite(amount) || amount < 1 || amount > MAX_STAKE || Math.round(amount * 100) !== amount * 100) return send(res, 400, { ok: false, error: "Stake must be $1 to $1,000 with at most two decimal places" });
