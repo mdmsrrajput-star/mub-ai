@@ -76,6 +76,16 @@ footer{text-align:center;padding:20px 12px}
 <main>
   <div class="banner">PAPER MODE ACTIVE · REAL ORDER EXECUTION DISABLED</div>
 
+  <div class="controls section" role="tablist" aria-label="Account type">
+    <button type="button" id="demoAccountTab" class="active" role="tab" aria-selected="true">DEMO ACCOUNT</button>
+    <button type="button" id="realAccountTab" role="tab" aria-selected="false">REAL ACCOUNT · LOCKED</button>
+  </div>
+  <div class="panel section" id="realAccountLockedPanel" hidden>
+    <h2>Real account is not connected</h2>
+    <div class="value negative">REAL TRADING DISABLED</div>
+    <div class="note section">MuB has no broker/exchange account connection or live-order authorization. This tab is informational only. No deposits, account credentials, or real orders can be handled here. Switch to Demo Account to continue paper trading.</div>
+  </div>
+
   <div class="controls section">
     <button class="active" id="goldButton">GOLD · XAU/USD</button>
     <button id="btcButton">BTC / USDT</button>
@@ -1155,6 +1165,7 @@ async function changeTimeframe(tf) {
   }
 }
 
+let accountMode = "DEMO";
 let paperExecutionMode = "MANUAL";
 let paperDirection = "UP";
 let paperAmount = 1;
@@ -1294,6 +1305,10 @@ async function refreshPredictionAccount() {
   }
 }
 async function startPaperPrediction(options = {}) {
+  if (accountMode !== "DEMO") {
+    $("predictionStatus").textContent = "REAL ACCOUNT LOCKED · No live orders can be placed.";
+    return false;
+  }
   if (predictionRequestBusy) return;
   if (!["BTCUSDT","ETHUSDT","EURUSD","GBPUSD"].includes(symbol)) {
     $("predictionStatus").textContent = "Gold and forex predictions are not enabled. Select BTC/USDT or ETH/USDT.";
@@ -1350,6 +1365,25 @@ function updatePaperTradeControls() {
     ? "AUTO paper-only mode analyses the selected expiry timeframe, requires a fresh BUY/SELL score ≥70 and matching order-block direction, then starts one prediction per matching zone. If forex data is unavailable/rate-limited, no fresh forex prediction is allowed. Chart zones are not trades."
     : "MANUAL mode lets you select UP or DOWN. No order is submitted by changing these controls. Chart zones are not trades.";
 }
+
+function setAccountMode(mode) {
+  accountMode = mode === "REAL" ? "REAL" : "DEMO";
+  const isDemo = accountMode === "DEMO";
+  $("demoAccountTab").classList.toggle("active", isDemo);
+  $("realAccountTab").classList.toggle("active", !isDemo);
+  $("demoAccountTab").setAttribute("aria-selected", String(isDemo));
+  $("realAccountTab").setAttribute("aria-selected", String(!isDemo));
+  $("realAccountLockedPanel").hidden = isDemo;
+  $("tradeControls").hidden = !isDemo;
+  $("predictionTradeHistoryPanel").hidden = !isDemo;
+  if (!isDemo) {
+    // Explicitly stop UI auto-entry while viewing the locked real-account tab.
+    paperExecutionMode = "MANUAL";
+    updatePaperTradeControls();
+  }
+}
+$("demoAccountTab").addEventListener("click", () => setAccountMode("DEMO"));
+$("realAccountTab").addEventListener("click", () => setAccountMode("REAL"));
 
 $("manualModeButton").addEventListener("click", () => {
   paperExecutionMode = "MANUAL";
