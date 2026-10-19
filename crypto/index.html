@@ -104,7 +104,7 @@ footer{text-align:center;padding:20px 12px}
       <button type="button" class="expiryButton" data-expiry="30m">30 MIN</button>
       <button type="button" class="expiryButton" data-expiry="1h">1 HOUR</button>
     </div>
-    <div class="note section" id="expiryGuidance" aria-live="polite">Selected expiry: 1 minute. A prediction would settle at the end of this period only after a prediction settlement engine is connected.</div>
+    <div class="note section" id="expiryGuidance" aria-live="polite">Selected prediction holding time: 1 minute. This is independent of the chart candle size; the signal timeframe follows the chart selection.</div>
     <div class="label section">Paper stake (USD per UP/DOWN prediction)</div>
     <div class="controls section" role="group" aria-label="Paper position amount">
       <button type="button" class="amountButton active" data-amount="1">$1</button>
@@ -946,6 +946,8 @@ async function changeTimeframe(tf) {
   try {
     await loadHistory();
     connectMarketSocket();
+    // Recalculate the signal whenever the user changes chart timeframe.
+    await refreshSignal();
   } catch(e) {
     $("chartStatus").textContent="Chart error: "+e.message;
   } finally {
@@ -968,8 +970,8 @@ document.querySelectorAll(".expiryButton").forEach(button => {
     document.querySelectorAll(".expiryButton").forEach(b =>
       b.classList.toggle("active", b === button)
     );
-    $("expiryGuidance").textContent = "Selected expiry: " + expiryLabels[paperExpiry] +
-      ". A prediction would settle at the end of this period only after a prediction settlement engine is connected.";
+    $("expiryGuidance").textContent = "Selected prediction holding time: " + expiryLabels[paperExpiry] +
+      ". This is independent of the chart candle size; the signal timeframe follows the chart selection.";
     updatePaperTradeControls();
   });
 });
