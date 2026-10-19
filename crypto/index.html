@@ -215,13 +215,13 @@ footer{text-align:center;padding:20px 12px}
   <div class="note" id="paperPositions">Open positions: —</div>
 </div>
     <div class="panel">
-      <div class="label">Signal engine · 5m</div>
+      <div class="label" id="signalEngineLabel">Signal engine · follows chart timeframe</div>
       <div class="value" id="signalValue">LOADING...</div>
       <div class="note" id="signalScore">Connecting to signal API...</div>
       <div class="note" id="signalUpdated"></div>
     </div>
     <div class="panel">
-      <div class="label">Order block analysis · 5m</div>
+      <div class="label" id="orderBlockLabel">Order block analysis · follows chart timeframe</div>
       <div class="value" id="orderBlockValue">CALCULATING...</div>
       <div class="note" id="orderBlockDetails">Detecting potential bullish and bearish zones from completed candles.</div>
     </div>
@@ -236,7 +236,7 @@ footer{text-align:center;padding:20px 12px}
     <div class="panel">
       <div class="label">Signal API status</div>
       <div class="value" id="signalConnection">CONNECTING</div>
-      <div class="note">Refreshes every five minutes</div>
+      <div class="note">Refreshes every minute; analysis timeframe follows the chart selection.</div>
     </div>
     <div class="panel">
       <div class="label">Order execution</div>
@@ -392,6 +392,11 @@ function money(n) {
 function setStatus(id,text,good) {
   $(id).textContent = text;
   $(id).style.color = good ? "var(--green)" : "var(--red)";
+}
+
+function signalIntervalForChart(tf) {
+  // Binance signal analysis supports minute-and-higher candles; sub-minute charts use 1m signal candles.
+  return ["5s","15s","30s"].includes(tf) ? "1m" : tf;
 }
 
 function intervalMs(tf) {
@@ -715,7 +720,7 @@ async function refreshSignal() {
 
   try {
     const response=await fetch(
-      "/api/crypto-signal?symbol="+symbol,
+      "/api/crypto-signal?symbol="+symbol+"&timeframe="+encodeURIComponent(signalIntervalForChart(timeframe)),
       {cache:"no-store"}
     );
     if(!response.ok) throw new Error("Signal API HTTP "+response.status);
@@ -736,6 +741,8 @@ async function refreshSignal() {
       new Date(data.generatedAt).toLocaleTimeString();
 
     const i=data.indicators||{};
+    $("signalEngineLabel").textContent="Signal engine · "+(data.interval||"5m");
+    $("orderBlockLabel").textContent="Order block analysis · "+(data.interval||"5m");
     $("indicators").textContent=
       "EMA20: "+Number(i.ema20).toFixed(2)+
       " · EMA50: "+Number(i.ema50).toFixed(2)+
