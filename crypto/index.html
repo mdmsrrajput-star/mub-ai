@@ -242,7 +242,7 @@ footer{text-align:center;padding:20px 12px}
     <div class="panel">
       <div class="label">Signal API status</div>
       <div class="value" id="signalConnection">CONNECTING</div>
-      <div class="note">Refreshes every minute; analysis timeframe follows the chart selection.</div>
+      <div class="note">Refreshes every minute and on chart changes. Shows the last successful calculation time; stale or failed data is flagged.</div>
     </div>
     <div class="panel">
       <div class="label">Order execution</div>
@@ -719,18 +719,26 @@ async function refreshOrderBook(expectedSymbol=symbol) {
   if(generation!==analyticsGeneration || expectedSymbol!==symbol) return;
   renderDepth(data,expectedSymbol);
 }
+let signalRequestGeneration = 0;
+let lastSuccessfulSignalAt = 0;
+
 async function refreshSignal() {
-  if(refreshingSignal) return;
+  const requestGeneration = ++signalRequestGeneration;
+  const requestedSymbol = symbol;
+  const requestedChartTimeframe = timeframe;
+  const requestedSignalTimeframe = signalIntervalForChart(requestedChartTimeframe);
   refreshingSignal=true;
   setStatus("signalConnection","CHECKING",false);
+  $("signalScore").textContent = "Calculating from completed " + requestedSignalTimeframe + " candles…";
 
   try {
     const response=await fetch(
-      "/api/crypto-signal?symbol="+symbol+"&timeframe="+encodeURIComponent(signalIntervalForChart(timeframe)),
+      "/api/crypto-signal?symbol="+requestedSymbol+"&timeframe="+encodeURIComponent(requestedSignalTimeframe)+"&_="+Date.now(),
       {cache:"no-store"}
     );
     if(!response.ok) throw new Error("Signal API HTTP "+response.status);
     const data=await response.json();
+    if(requestGeneration !== signalRequestGeneration || requestedSymbol !== symbol || requestedChartTimeframe !== timeframe) return;
 
     if(!["BUY","SELL","WAIT"].includes(data.signal))
       throw new Error("Unexpected signal response");
@@ -743,12 +751,17 @@ async function refreshSignal() {
     $("signalScore").textContent="Score: "+data.score+
       " · "+data.candlesUsed+" completed candles";
 
-    $("signalUpdated").textContent="Updated: "+
-      new Date(data.generatedAt).toLocaleTimeString();
+    const calculatedAt = Date.parse(data.generatedAt);
+    if(!Number.isFinite(calculatedAt)) throw new Error("Signal response has no valid calculation timestamp");
+    lastSuccessfulSignalAt = calculatedAt;
+    const ageSeconds = Math.max(0, Math.floor((Date.now()-calculatedAt)/1000));
+    const ageLabel = ageSeconds < 60 ? ageSeconds + "s ago" : Math.floor(ageSeconds/60) + "m ago";
+    $("signalUpdated").textContent="Calculated: "+new Date(calculatedAt).toLocaleTimeString()+" · "+ageLabel;
+    $("signalEngineLabel").textContent="Signal engine · chart "+requestedChartTimeframe+" / analysis "+data.interval;
+    $("orderBlockLabel").textContent="Order block analysis · "+data.interval+" candles";
+    if(data.interval !== requestedSignalTimeframe) throw new Error("Timeframe mismatch: requested "+requestedSignalTimeframe+", received "+data.interval);
 
     const i=data.indicators||{};
-    $("signalEngineLabel").textContent="Signal engine · "+(data.interval||"5m");
-    $("orderBlockLabel").textContent="Order block analysis · "+(data.interval||"5m");
     $("indicators").textContent=
       "EMA20: "+Number(i.ema20).toFixed(2)+
       " · EMA50: "+Number(i.ema50).toFixed(2)+
@@ -758,19 +771,25 @@ async function refreshSignal() {
       " · ATR14: "+Number(i.atr14).toFixed(2);
 
     $("signalReasons").textContent=(data.reasons||[]).join(" · ");
-    renderOrderBlocks(data, symbol);
-    setStatus("signalConnection","CONNECTED",true);
+    renderOrderBlocks(data, requestedSymbol);
+    setStatus("signalConnection", ageSeconds > 120 ? "STALE DATA" : "CONNECTED", ageSeconds <= 120);
   } catch(e) {
+    if(requestGeneration !== signalRequestGeneration) return;
     $("signalValue").textContent="UNAVAILABLE";
     $("signalValue").style.color="var(--red)";
-    $("signalScore").textContent=e.message;
+    $("signalScore").textContent=e.message+" · Selected chart: "+requestedChartTimeframe;
+    $("signalUpdated").textContent=lastSuccessfulSignalAt
+      ? "Last successful calculation: "+new Date(lastSuccessfulSignalAt).toLocaleTimeString()+" · may be stale"
+      : "No successful calculation yet."; 
+    $("signalEngineLabel").textContent="Signal engine · chart "+requestedChartTimeframe+" / analysis "+requestedSignalTimeframe;
+    $("orderBlockLabel").textContent="Order block analysis · "+requestedSignalTimeframe+" candles";
     $("indicators").textContent="No current indicator readings.";
     $("signalReasons").textContent="Check that the signal API is deployed.";
     $("orderBlockValue").textContent="UNAVAILABLE";
     $("orderBlockDetails").textContent="Order-block analysis requires the signal API response.";
     setStatus("signalConnection","ERROR",false);
   } finally {
-    refreshingSignal=false;
+    if(requestGeneration === signalRequestGeneration) refreshingSignal=false;
   }
 }
 
