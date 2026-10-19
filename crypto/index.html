@@ -994,9 +994,23 @@ async function selectSymbol(next) {
     $("priceLabel").textContent = symbolLabel(symbol) + " · FOREX PRICE";
     $("livePrice").textContent = "Loading…"; $("priceChange").textContent = "Twelve Data forex feed";
     $("signalValue").textContent = "LOADING…"; $("signalScore").textContent = "Calculating forex indicators…";
-    try { await loadHistory(); await Promise.allSettled([refreshForexPrice(), refreshForexSignal(), refreshPaperAccount()]); $("systemMessage").textContent = symbolLabel(symbol) + " selected. Forex candles and indicators loaded where provider access is available. Paper-only."; }
-    catch(e) { $("systemMessage").textContent = "Forex load issue: " + e.message; }
-    finally { changing = false; }
+    // Load the chart first; it also updates the displayed forex price, so avoid a duplicate price API call.
+    // Start the independent signal/account requests in parallel to reduce perceived selection delay.
+    const selectedSymbol = symbol;
+    const selectedTimeframe = timeframe;
+    const chartLoad = loadHistory();
+    const sideLoads = Promise.allSettled([refreshForexSignal(), refreshPaperAccount()]);
+    try {
+      const results = await Promise.allSettled([chartLoad, sideLoads]);
+      if (selectedSymbol !== symbol || selectedTimeframe !== timeframe) return;
+      const chartResult = results[0];
+      if (chartResult.status === "rejected") throw chartResult.reason;
+      $("systemMessage").textContent = symbolLabel(symbol) + " selected. Forex chart loaded; signal/account panels update independently. Paper-only.";
+    } catch(e) {
+      if (selectedSymbol === symbol) $("systemMessage").textContent = "Forex load issue: " + e.message;
+    } finally {
+      if (selectedSymbol === symbol) changing = false;
+    }
     return;
   }
   if (next === "XAUUSD") {
