@@ -77,7 +77,11 @@ if action == "status" then return cjson.encode(s) end
 if action == "start" then
  local amount = tonumber(p.amount)
  if not amount or amount < 1 or amount > 1000 then return redis.error_reply("Stake must be between $1 and $1,000") end
- if tonumber(s.balance or 0) < amount then return redis.error_reply("Insufficient paper balance") end
+ local committed = 0
+ for _, a in ipairs(s.active) do
+  if a and a.status == "PENDING" then committed = committed + (tonumber(a.stake) or 0) end
+ end
+ if tonumber(s.balance or 0) - committed < amount then return redis.error_reply("Insufficient available paper balance after pending stakes") end
  table.insert(s.active, {
   id = p.id, symbol = p.symbol, direction = p.direction, stake = amount,
   expiry = p.expiry, entryPrice = tonumber(p.price), startedAt = tonumber(p.now),
