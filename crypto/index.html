@@ -983,6 +983,22 @@ function setMarketView(isGold) {
 }
 
 async function selectSymbol(next) {
+  if (["EURUSD","GBPUSD"].includes(next)) {
+    if (changing) return;
+    changing = true; symbol = next; isForex = true;
+    if (["5s","15s","30s","3m"].includes(timeframe)) timeframe = "5m";
+    analyticsGeneration++; signalRequestGeneration++;
+    ["goldButton","btcButton","ethButton","eurusdButton","gbpusdButton"].forEach(id => $(id).classList.toggle("active", id === (next === "EURUSD" ? "eurusdButton" : "gbpusdButton")));
+    setMarketView(false); stopMarketSocket(); stopPriceSocket();
+    $("chartTitle").textContent = symbolLabel(symbol) + " · " + timeframe;
+    $("priceLabel").textContent = symbolLabel(symbol) + " · FOREX PRICE";
+    $("livePrice").textContent = "Loading…"; $("priceChange").textContent = "Twelve Data forex feed";
+    $("signalValue").textContent = "LOADING…"; $("signalScore").textContent = "Calculating forex indicators…";
+    try { await loadHistory(); await Promise.allSettled([refreshForexPrice(), refreshForexSignal(), refreshPaperAccount()]); $("systemMessage").textContent = symbolLabel(symbol) + " selected. Forex candles and indicators loaded where provider access is available. Paper-only."; }
+    catch(e) { $("systemMessage").textContent = "Forex load issue: " + e.message; }
+    finally { changing = false; }
+    return;
+  }
   if (next === "XAUUSD") {
     if (changing) return;
     changing = true;
@@ -1006,6 +1022,8 @@ async function selectSymbol(next) {
   if (!["BTCUSDT", "ETHUSDT"].includes(next) || (symbol === next && !$("chartTitle").closest(".panel").hidden) || changing) return;
   changing = true;
   symbol = next;
+  isForex = false;
+  $("eurusdButton").classList.remove("active"); $("gbpusdButton").classList.remove("active");
   analyticsGeneration++;
   $("depthImbalance").textContent="Loading "+symbolLabel(symbol)+" order book…";
   $("depthSummary").textContent="Switching market data…";
@@ -1290,6 +1308,8 @@ $("btcButton").addEventListener("click",()=>selectSymbol("BTCUSDT"));
 $("ethButton").addEventListener("click",()=>selectSymbol("ETHUSDT"));
 $("eurusdButton").addEventListener("click",()=>selectSymbol("EURUSD"));
 $("gbpusdButton").addEventListener("click",()=>selectSymbol("GBPUSD"));
+$("eurusdButton").addEventListener("click",()=>selectSymbol("EURUSD"));
+$("gbpusdButton").addEventListener("click",()=>selectSymbol("GBPUSD"));
 $("refreshButton").addEventListener("click",refreshAll);
 
 document.querySelectorAll("#timeframes button").forEach(b=>{
@@ -1317,6 +1337,7 @@ refreshGoldFeed();
 setInterval(()=>refreshGoldFeed().catch(()=>{}),120000);
 start();
 setInterval(()=>refresh24h().catch(()=>{}),60000);
+setInterval(()=>{if(isForex){loadHistory().catch(e=>{$("chartStatus").textContent="Forex refresh error: "+e.message;});refreshForexSignal().catch(()=>{});}},30000);
 setInterval(()=>refreshOrderBook().catch(()=>{}),10000);
 let signalRefreshTimer = null;
 function signalRefreshDelayMs(tf) {
