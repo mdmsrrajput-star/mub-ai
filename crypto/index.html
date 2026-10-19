@@ -1154,9 +1154,8 @@ async function selectSymbol(next) {
   if (next === "XAUUSD") {
     if (changing) return;
     changing = true;
-    $("goldButton").classList.add("active");
-    $("btcButton").classList.remove("active");
-    $("ethButton").classList.remove("active");
+    $("metalsSelect").value = "XAUUSD";
+    selectedMarketCategory = "metalsSelect";
     setMarketView(true);
     stopMarketSocket();
     stopPriceSocket();
