@@ -18,6 +18,21 @@ export default async function handler(req, res) {
     });
   }
 
+  const requestedTimeframe = String(req.query?.timeframe || "5m");
+  const timeframeMap = {
+    "1m": { interval: "1m", seconds: 60, trend: "15m", trendSeconds: 900 },
+    "3m": { interval: "3m", seconds: 180, trend: "15m", trendSeconds: 900 },
+    "5m": { interval: "5m", seconds: 300, trend: "15m", trendSeconds: 900 },
+    "15m": { interval: "15m", seconds: 900, trend: "1h", trendSeconds: 3600 },
+    "30m": { interval: "30m", seconds: 1800, trend: "2h", trendSeconds: 7200 },
+    "1h": { interval: "1h", seconds: 3600, trend: "4h", trendSeconds: 14400 },
+    "4h": { interval: "4h", seconds: 14400, trend: "1d", trendSeconds: 86400 },
+    "1d": { interval: "1d", seconds: 86400, trend: "1w", trendSeconds: 604800 },
+    "1w": { interval: "1w", seconds: 604800, trend: "1M", trendSeconds: 2592000 }
+  };
+  const tf = timeframeMap[requestedTimeframe];
+  if (!tf) return res.status(400).json({ error: "Unsupported signal timeframe. Use 1m, 3m, 5m, 15m, 30m, 1h, 4h, 1d, or 1w." });
+
   const emaSeries = (values, period) => {
     const alpha = 2 / (period + 1);
     let value = values[0];
@@ -125,12 +140,12 @@ export default async function handler(req, res) {
 
   try {
     const [candles, trendCandles] = await Promise.all([
-      fetchCandles("5m", 300, 180),
-      fetchCandles("15m", 900, 120)
+      fetchCandles(tf.interval, tf.seconds, 180),
+      fetchCandles(tf.trend, tf.trendSeconds, 120)
     ]);
 
     if (candles.length < 60 || trendCandles.length < 55) {
-      throw new Error("Insufficient completed candle history");
+      throw new Error("Insufficient completed candle history for " + tf.interval + " / " + tf.trend);
     }
 
     const closes = candles.map(c => c.close);
@@ -236,7 +251,7 @@ export default async function handler(req, res) {
         : last.close < fvg.lower && last.close < last.open;
     }
 
-    // Heuristic order-block detection from completed 5-minute candles.
+    // Heuristic order-block detection from completed candles at the selected chart timeframe.
     // A candidate is the last opposite-colour candle before a strong move
     // that closes beyond the prior five-candle structure.
     const orderBlocks = [];
@@ -306,8 +321,8 @@ export default async function handler(req, res) {
       Math.max(buyVotes, sellVotes) / votes.length * 100;
 
     const reasons = [
-      "Analysis uses completed 5-minute candles",
-      "15-minute trend: " + trend,
+      "Analysis uses completed " + tf.interval + " candles",
+      tf.trend + " trend: " + trend,
       "Indicator agreement: " + agreementPercent.toFixed(0) + "%",
       fvg
         ? "Recent FVG: " + fvg.direction
@@ -357,8 +372,8 @@ export default async function handler(req, res) {
       executionEnabled: false,
       liveTradingEnabled: false,
       symbol,
-      interval: "5m",
-      trendInterval: "15m",
+      interval: tf.interval,
+      trendInterval: tf.trend,
       signal,
       score: buyVotes - sellVotes,
       agreementPercent,
