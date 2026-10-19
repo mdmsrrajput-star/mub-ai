@@ -883,7 +883,7 @@ async function refreshSignal() {
 
     $("signalReasons").textContent=(data.reasons||[]).join(" · ");
     renderOrderBlocks(data, requestedSymbol);
-    await maybeAutoTradeZone(data, requestedSymbol, requestedChartTimeframe);
+    await maybeAutoTradeZone(data, requestedSymbol, requestedSignalTimeframe);
     setStatus("signalConnection", ageSeconds > 120 ? "STALE DATA" : "CONNECTED", ageSeconds <= 120);
   } catch(e) {
     if(requestGeneration !== signalRequestGeneration) return;
@@ -1144,6 +1144,7 @@ document.querySelectorAll(".expiryButton").forEach(button => {
     $("expiryGuidance").textContent = "Selected prediction holding time: " + expiryLabels[paperExpiry] +
       ". In AUTO mode, MuB analyses using the selected expiry timeframe (with higher-timeframe confirmation); the chart timeframe is only the chart view.";
     updatePaperTradeControls();
+    if (paperExecutionMode === "AUTO") refreshSignal();
   });
 });
 
