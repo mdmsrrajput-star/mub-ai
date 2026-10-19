@@ -81,12 +81,14 @@ if action == "start" then
  for _, a in ipairs(s.active) do
   if a and a.status == "PENDING" then committed = committed + (tonumber(a.stake) or 0) end
  end
- if tonumber(s.balance or 0) - committed < amount then return redis.error_reply("Insufficient available paper balance after pending stakes") end
+ if tonumber(s.balance or 0) < amount then return redis.error_reply("Insufficient available paper balance") end
+ -- Deduct the stake immediately when the paper order is accepted.
+ s.balance = tonumber(s.balance or 10000) - amount
  table.insert(s.active, {
   id = p.id, symbol = p.symbol, direction = p.direction, stake = amount,
   expiry = p.expiry, entryPrice = tonumber(p.price), startedAt = tonumber(p.now),
   expiresAt = tonumber(p.now) + tonumber(p.duration), status = "PENDING",
-  payoutRate = 1.0
+  payoutRate = 1.0, stakeDeducted = true
  })
  local ok, encoded = pcall(cjson.encode, s)
  if not ok or not encoded then return redis.error_reply("Could not encode paper prediction state: " .. tostring(encoded)) end
@@ -104,7 +106,14 @@ if action == "settle" then
    local won = (direction == "UP" and exit > entry) or (direction == "DOWN" and exit < entry)
    local stake = tonumber(a.stake)
    local pnl = won and stake or -stake
-   s.balance = tonumber(s.balance or 10000) + pnl
+   -- New trades already had their stake deducted at entry. On a win, return
+   -- the stake plus equal profit; on a loss, no further balance deduction.
+   -- Preserve the previous settlement behavior for legacy pending trades.
+   if a.stakeDeducted then
+    if won then s.balance = tonumber(s.balance or 0) + (stake * 2) end
+   else
+    s.balance = tonumber(s.balance or 10000) + pnl
+   end
    a.status = "SETTLED"
    a.exitPrice = exit
    a.settledAt = tonumber(p.now)
