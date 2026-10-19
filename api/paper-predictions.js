@@ -68,51 +68,55 @@ if raw then s = cjson.decode(raw) else
  s = { balance = 10000, active = {}, history = {} }
 end
 if not s.history then s.history = {} end
+-- Migrate the older single-active-prediction format to an array.
+if type(s.active) == "table" and s.active.status then s.active = { s.active } end
+if type(s.active) ~= "table" then s.active = {} end
 local action = ARGV[1]
 local p = cjson.decode(ARGV[2])
 if action == "status" then return cjson.encode(s) end
 if action == "start" then
- if s.active and s.active.status == "PENDING" then return redis.error_reply("A prediction is already active") end
  local amount = tonumber(p.amount)
  if not amount or amount < 1 or amount > 1000 then return redis.error_reply("Stake must be between $1 and $1,000") end
  if tonumber(s.balance or 0) < amount then return redis.error_reply("Insufficient paper balance") end
- s.active = {
+ table.insert(s.active, {
   id = p.id, symbol = p.symbol, direction = p.direction, stake = amount,
   expiry = p.expiry, entryPrice = tonumber(p.price), startedAt = tonumber(p.now),
   expiresAt = tonumber(p.now) + tonumber(p.duration), status = "PENDING",
   payoutRate = 1.0
- }
- local encoded = cjson.encode(s)
- if not encoded then return redis.error_reply("Could not encode paper prediction state") end
+ })
+ local ok, encoded = pcall(cjson.encode, s)
+ if not ok or not encoded then return redis.error_reply("Could not encode paper prediction state: " .. tostring(encoded)) end
  redis.call("SET", KEYS[1], encoded)
  return encoded
 end
 if action == "settle" then
- if not s.active or s.active.status ~= "PENDING" then return cjson.encode(s) end
- if tonumber(p.now) < tonumber(s.active.expiresAt) then return cjson.encode(s) end
- local entry = tonumber(s.active.entryPrice)
- local exit = tonumber(p.price)
- local direction = s.active.direction
- local won = (direction == "UP" and exit > entry) or (direction == "DOWN" and exit < entry)
- local stake = tonumber(s.active.stake)
- local pnl = won and stake or -stake
- s.balance = tonumber(s.balance or 10000) + pnl
- s.active.status = "SETTLED"
- s.active.exitPrice = exit
- s.active.settledAt = tonumber(p.now)
- s.active.result = won and "WIN" or "LOSS"
- s.active.pnl = pnl
- -- Avoid referencing the same Lua table from both active and history;
- -- some cjson encoders treat that shared reference as a cycle.
- local settled = {}
- for k, v in pairs(s.active) do settled[k] = v end
- table.insert(s.history, 1, settled)
- while #s.history > 100 do table.remove(s.history) end
- local ok, encoded = pcall(cjson.encode, s)
- if not ok or not encoded then
-  return redis.error_reply("Could not encode settled prediction state: " .. tostring(encoded))
+ local found = false
+ for idx = #s.active, 1, -1 do
+  local a = s.active[idx]
+  if a and a.status == "PENDING" and a.id == p.id and tonumber(p.now) >= tonumber(a.expiresAt) then
+   local entry = tonumber(a.entryPrice)
+   local exit = tonumber(p.price)
+   local direction = a.direction
+   local won = (direction == "UP" and exit > entry) or (direction == "DOWN" and exit < entry)
+   local stake = tonumber(a.stake)
+   local pnl = won and stake or -stake
+   s.balance = tonumber(s.balance or 10000) + pnl
+   a.status = "SETTLED"
+   a.exitPrice = exit
+   a.settledAt = tonumber(p.now)
+   a.result = won and "WIN" or "LOSS"
+   a.pnl = pnl
+   local settled = {}
+   for k, v in pairs(a) do settled[k] = v end
+   table.insert(s.history, 1, settled)
+   while #s.history > 100 do table.remove(s.history) end
+   table.remove(s.active, idx)
+   found = true
+  end
  end
- redis.call("SET", KEYS[1], encoded)
+ local ok, encoded = pcall(cjson.encode, s)
+ if not ok or not encoded then return redis.error_reply("Could not encode settled prediction state: " .. tostring(encoded)) end
+ if found then redis.call("SET", KEYS[1], encoded) end
  return encoded
 end
 return redis.error_reply("Unsupported action")
@@ -128,13 +132,19 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     try {
       let state = await ledger("status");
-      if (state.active && state.active.status === "PENDING") {
-        const now = Date.now();
-        if (now >= Number(state.active.expiresAt)) {
-          const price = await getPrice(state.active.symbol);
-          state = await ledger("settle", { now, price });
+      const active = Array.isArray(state.active) ? state.active : (state.active && state.active.status ? [state.active] : []);
+      const now = Date.now();
+      for (const prediction of active) {
+        if (prediction && prediction.status === "PENDING" && now >= Number(prediction.expiresAt)) {
+          try {
+            const price = await getPrice(prediction.symbol);
+            state = await ledger("settle", { id: prediction.id, now: Date.now(), price });
+          } catch (settleError) {
+            console.error("Prediction settlement deferred:", settleError.message);
+          }
         }
       }
+      state = await ledger("status");
       return send(res, 200, { ok: true, account: state, payoutRate: PAYOUT_RATE });
     } catch (error) {
       console.error("Prediction status failed:", error.message);
