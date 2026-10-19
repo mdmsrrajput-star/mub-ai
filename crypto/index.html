@@ -325,7 +325,8 @@ async function maybeAutoTradeZone(data, expectedSymbol, expectedTimeframe) {
     "). Starting " + direction + " prediction for " + formatUsd(paperAmount) +
     " · " + expiryLabels[paperExpiry] + ". One prediction per detected zone.";
   try {
-    await startPaperPrediction({direction, autoZoneKey:key});
+    const started = await startPaperPrediction({direction, autoZoneKey:key});
+    if (started === false) autoTradedZoneKeys.delete(key);
   } catch (error) {
     autoTradedZoneKeys.delete(key);
     $("tradeSignalStatus").textContent = "AUTO PAPER START FAILED: " + error.message;
@@ -1181,8 +1182,10 @@ async function startPaperPrediction(options = {}) {
     renderPredictionAccount(data);
     $("predictionStatus").textContent = "PAPER PREDICTION STARTED · " + tradeDirection + " · " +
       expiryLabels[paperExpiry] + " · Stake " + formatUsd(paperAmount) + ". No real-money order placed.";
+    return true;
   } catch (error) {
     $("predictionStatus").textContent = "NOT STARTED · " + error.message;
+    return false;
   } finally {
     predictionRequestBusy = false;
     await refreshPredictionAccount();
