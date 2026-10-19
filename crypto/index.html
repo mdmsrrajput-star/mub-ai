@@ -106,7 +106,7 @@ footer{text-align:center;padding:20px 12px}
       <button type="button" class="expiryButton" data-expiry="30m">30 MIN</button>
       <button type="button" class="expiryButton" data-expiry="1h">1 HOUR</button>
     </div>
-    <div class="note section" id="expiryGuidance" aria-live="polite">Selected prediction holding time: 1 minute. This is independent of the chart candle size; the signal timeframe follows the chart selection.</div>
+    <div class="note section" id="expiryGuidance" aria-live="polite">Selected prediction holding time: 1 minute. In AUTO mode, MuB analyses the selected expiry timeframe with higher-timeframe confirmation; chart timeframe controls only the chart view.</div>
     <div class="label section">Paper stake (USD per UP/DOWN prediction)</div>
     <div class="controls section" role="group" aria-label="Paper position amount">
       <button type="button" class="amountButton active" data-amount="1">$1</button>
@@ -1026,6 +1026,7 @@ async function selectSymbol(next) {
     analyticsGeneration++; signalRequestGeneration++;
     ["goldButton","btcButton","ethButton","eurusdButton","gbpusdButton"].forEach(id => $(id).classList.toggle("active", id === (next === "EURUSD" ? "eurusdButton" : "gbpusdButton")));
     setMarketView(false); stopMarketSocket(); stopPriceSocket();
+    setStatus("connection", "FOREX FEED", true);
     $("chartTitle").textContent = symbolLabel(symbol) + " · " + timeframe;
     $("priceLabel").textContent = symbolLabel(symbol) + " · FOREX PRICE";
     $("livePrice").textContent = "Loading…"; $("priceChange").textContent = "Twelve Data forex feed";
@@ -1043,7 +1044,7 @@ async function selectSymbol(next) {
       if (chartResult.status === "rejected") throw chartResult.reason;
       $("systemMessage").textContent = symbolLabel(symbol) + " selected. Forex chart loaded; signal/account panels update independently. Paper-only.";
     } catch(e) {
-      if (selectedSymbol === symbol) $("systemMessage").textContent = "Forex load issue: " + e.message;
+      if (selectedSymbol === symbol) { $("systemMessage").textContent = "Forex load issue: " + e.message; setStatus("connection", "FOREX FEED ERROR", false); $("livePrice").textContent = "Unavailable"; }
     } finally {
       if (selectedSymbol === symbol) changing = false;
     }
