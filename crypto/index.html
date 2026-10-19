@@ -471,6 +471,13 @@ async function refreshGoldFeed() {
     priceEl.textContent = goldLastValue === null ? "FEED UNAVAILABLE" : "$" + money(goldLastValue) + " (last seen)";
     freshnessEl.textContent = "Gold feed error: " + e.message + " · Do not treat cached value as live.";
     freshnessEl.className = "change negative";
+    setStatus("connection", "GOLD FEED ERROR", false);
+    clearOrderBlockLines();
+    $("orderBlockValue").textContent = "GOLD SPOT ONLY · NO TRADE SIGNAL";
+    $("orderBlockDetails").textContent = "Gold feed unavailable and no gold-specific candle/signal engine is connected. No gold trade signal is available.";
+    $("signalValue").textContent = "UNAVAILABLE · GOLD SIGNAL NOT CONNECTED";
+    $("signalScore").textContent = "No gold-specific signal available; do not trade from stale markers.";
+    $("signalReasons").textContent = "Gold feed unavailable; no fresh gold analysis was performed.";
   }
 }
 
@@ -1059,6 +1066,13 @@ async function selectSymbol(next) {
     setMarketView(true);
     stopMarketSocket();
     stopPriceSocket();
+    // Gold is currently spot-price display only; clear any crypto/forex analysis markers.
+    clearOrderBlockLines();
+    $("orderBlockValue").textContent = "GOLD SPOT ONLY · NO TRADE SIGNAL";
+    $("orderBlockDetails").textContent = "Gold candles and a validated gold signal engine are not connected. Do not use leftover crypto/forex zones for gold decisions.";
+    $("signalValue").textContent = "UNAVAILABLE · GOLD SIGNAL NOT CONNECTED";
+    $("signalScore").textContent = "Spot-price display only; no gold prediction will be generated.";
+    $("signalReasons").textContent = "Gold candles and gold-specific indicators are not connected.";
     $("priceLabel").textContent = "GOLD · XAU/USD · LIVE SPOT";
     $("livePrice").textContent = "Use gold spot card above";
     $("priceChange").textContent = "Gold feed shown in the Gold spot card";
