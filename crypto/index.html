@@ -308,15 +308,28 @@ let autoZoneStartBusy = false;
 
 async function maybeAutoTradeZone(data, expectedSymbol, expectedTimeframe) {
   if (paperExecutionMode !== "AUTO" || expectedSymbol !== symbol ||
-      expectedTimeframe !== timeframe || !["BTCUSDT","ETHUSDT","EURUSD","GBPUSD"].includes(expectedSymbol) ||
+      expectedTimeframe !== selectedAnalysisTimeframe() || !["BTCUSDT","ETHUSDT","EURUSD","GBPUSD"].includes(expectedSymbol) ||
       autoZoneStartBusy || predictionRequestBusy) return;
+  const score = Number(data && data.score);
+  const signal = String(data && data.signal || "").toUpperCase();
+  // Require a strong enough score and a signal aligned with the detected zone.
+  if (!Number.isFinite(score) || score < 70 || !["BUY","SELL"].includes(signal)) {
+    $("tradeSignalStatus").textContent = "AUTO WAIT · " + expectedTimeframe + " analysis needs a BUY/SELL signal with score ≥70; no prediction started.";
+    return;
+  }
   const blocks = data && Array.isArray(data.orderBlocks) ? data.orderBlocks : [];
   const valid = blocks.filter(b =>
     Number.isFinite(Number(b.lower)) && Number.isFinite(Number(b.upper)) &&
     ["BULLISH","BEARISH"].includes(b.direction));
   if (!valid.length) return;
   // Prefer a retested zone with a reaction; otherwise use the newest zone returned by the signal API.
-  const zone = valid.find(b => b.retested && b.reaction) || valid[0];
+  const alignedDirection = signal === "BUY" ? "BULLISH" : "BEARISH";
+  const aligned = valid.filter(b => b.direction === alignedDirection);
+  if (!aligned.length) {
+    $("tradeSignalStatus").textContent = "AUTO WAIT · " + signal + " signal conflicts with detected order block; no prediction started.";
+    return;
+  }
+  const zone = aligned.find(b => b.retested && b.reaction) || aligned[0];
   const key = [expectedSymbol, expectedTimeframe, zone.direction,
     Number(zone.lower).toPrecision(12), Number(zone.upper).toPrecision(12)].join("|");
   if (autoTradedZoneKeys.has(key)) return;
@@ -377,16 +390,16 @@ async function refreshForexPrice() {
   $("priceLabel").textContent = symbolLabel(s) + " · FOREX PRICE";
 }
 async function refreshForexSignal() {
-  const s = symbol, tf = timeframe;
+  const s = symbol, tf = paperExecutionMode === "AUTO" ? selectedAnalysisTimeframe() : timeframe;
   const r = await fetch("/api/forex-signal?symbol=" + s + "&timeframe=" + encodeURIComponent(tf) + "&_=" + Date.now(), {cache:"no-store"});
   const d = await r.json();
-  if (s !== symbol || tf !== timeframe) return;
+  if (s !== symbol || (paperExecutionMode === "AUTO" ? tf !== selectedAnalysisTimeframe() : tf !== timeframe)) return;
   if (!r.ok || !d.signal) throw new Error(d.error || "Forex signal unavailable");
   $("signalValue").textContent = d.signal;
   $("signalValue").style.color = d.signal === "BUY" ? "var(--green)" : d.signal === "SELL" ? "var(--red)" : "var(--blue)";
   $("signalScore").textContent = "Score: " + d.score + " · " + d.candlesUsed + " candles";
   $("signalUpdated").textContent = "Calculated " + new Date(d.generatedAt).toLocaleTimeString();
-  $("signalEngineLabel").textContent = "Forex signal · " + tf + " / higher-timeframe trend";
+  $("signalEngineLabel").textContent = "Forex signal · analysis " + tf + " / higher-timeframe trend" + (paperExecutionMode === "AUTO" ? " · matched to " + expiryLabels[paperExpiry] + " expiry" : "");
   $("orderBlockLabel").textContent = "Forex order-block heuristic · " + tf;
   const i = d.indicators || {};
   $("indicators").textContent = "EMA20: " + Number(i.ema20).toFixed(5) + " · EMA50: " + Number(i.ema50).toFixed(5) + " · RSI14: " + Number(i.rsi14).toFixed(1);
@@ -475,6 +488,13 @@ function setStatus(id,text,good) {
 function signalIntervalForChart(tf) {
   // Binance signal analysis supports minute-and-higher candles; sub-minute charts use 1m signal candles.
   return ["5s","15s","30s"].includes(tf) ? "1m" : tf;
+}
+
+function selectedAnalysisTimeframe() {
+  // In AUTO mode, the selected prediction expiry controls entry analysis, not the chart zoom.
+  const expiryTf = {"1m":"1m","3m":"3m","5m":"5m","15m":"15m","30m":"30m","1h":"1h"}[paperExpiry] || "1m";
+  // Twelve Data forex endpoint currently supports 1m and 5m but not 3m.
+  return isForex && expiryTf === "3m" ? "1m" : expiryTf;
 }
 
 function intervalMs(tf) {
@@ -815,7 +835,9 @@ async function refreshSignal() {
   const requestGeneration = ++signalRequestGeneration;
   const requestedSymbol = symbol;
   const requestedChartTimeframe = timeframe;
-  const requestedSignalTimeframe = signalIntervalForChart(requestedChartTimeframe);
+  const requestedSignalTimeframe = paperExecutionMode === "AUTO"
+    ? selectedAnalysisTimeframe()
+    : signalIntervalForChart(requestedChartTimeframe);
   refreshingSignal=true;
   setStatus("signalConnection","CHECKING",false);
   $("signalScore").textContent = "Calculating from completed " + requestedSignalTimeframe + " candles…";
@@ -846,7 +868,7 @@ async function refreshSignal() {
     const ageSeconds = Math.max(0, Math.floor((Date.now()-calculatedAt)/1000));
     const ageLabel = ageSeconds < 60 ? ageSeconds + "s ago" : Math.floor(ageSeconds/60) + "m ago";
     $("signalUpdated").textContent="Calculated: "+new Date(calculatedAt).toLocaleTimeString()+" · "+ageLabel;
-    $("signalEngineLabel").textContent="Signal engine · chart "+requestedChartTimeframe+" / analysis "+data.interval;
+    $("signalEngineLabel").textContent="Signal engine · chart "+requestedChartTimeframe+" / analysis "+data.interval+(paperExecutionMode === "AUTO" ? " · matched to "+expiryLabels[paperExpiry]+" expiry" : "");
     $("orderBlockLabel").textContent="Order block analysis · "+data.interval+" candles";
     if(data.interval !== requestedSignalTimeframe) throw new Error("Timeframe mismatch: requested "+requestedSignalTimeframe+", received "+data.interval);
 
@@ -1120,7 +1142,7 @@ document.querySelectorAll(".expiryButton").forEach(button => {
       b.classList.toggle("active", b === button)
     );
     $("expiryGuidance").textContent = "Selected prediction holding time: " + expiryLabels[paperExpiry] +
-      ". This is independent of the chart candle size; the signal timeframe follows the chart selection.";
+      ". In AUTO mode, MuB analyses using the selected expiry timeframe (with higher-timeframe confirmation); the chart timeframe is only the chart view.";
     updatePaperTradeControls();
   });
 });
@@ -1295,7 +1317,7 @@ function updatePaperTradeControls() {
       ? "Prediction settlement is paper-only; no real-money orders are possible."
       : "Fix the amount before starting a paper prediction.");
   $("tradeSignalStatus").textContent = paperExecutionMode === "AUTO"
-    ? "AUTO mode starts paper-only UP/DOWN predictions when a new order-block zone is detected on BTC/USDT or ETH/USDT. Direction follows bullish/bearish zone; selected stake and expiry are used. One prediction per zone; no real orders."
+    ? "AUTO paper-only mode analyses the selected expiry timeframe, requires a BUY/SELL score ≥70 and a matching order-block direction, then starts one prediction per matching zone. Chart timeframe is separate; no real orders."
     : "MANUAL mode lets you select UP or DOWN. No order is submitted by changing these controls.";
 }
 
