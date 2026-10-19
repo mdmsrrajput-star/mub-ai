@@ -2,7 +2,7 @@ const STATE_KEY = "mub:paper:prediction:v1";
 const STARTING_BALANCE = 10000;
 const MAX_STAKE = 1000;
 const PAYOUT_RATE = 1.0;
-const ALLOWED_SYMBOLS = ["BTCUSDT", "ETHUSDT", "EURUSD", "GBPUSD"];
+const ALLOWED_SYMBOLS = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","XAGUSD"];
 const EXPIRIES = { "1m": 60000, "3m": 180000, "5m": 300000, "15m": 900000, "30m": 1800000, "1h": 3600000 };
 
 function send(res, status, data) {
@@ -30,11 +30,11 @@ async function redisCommand(command) {
   return data.result;
 }
 async function getPrice(symbol) {
-  if (!ALLOWED_SYMBOLS.includes(symbol)) throw new Error("Supported symbols: BTCUSDT, ETHUSDT, EURUSD, GBPUSD");
-  if (symbol === "EURUSD" || symbol === "GBPUSD") {
+  if (!ALLOWED_SYMBOLS.includes(symbol)) throw new Error("Supported crypto, forex and silver symbols");
+  if (["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","XAGUSD"].includes(symbol)) {
     const apiKey = process.env.TWELVE_DATA_API_KEY;
     if (!apiKey) throw new Error("Forex data is not configured. Add TWELVE_DATA_API_KEY in Vercel environment variables.");
-    const pair = symbol === "EURUSD" ? "EUR/USD" : "GBP/USD";
+    const pair = ({EURUSD:"EUR/USD",GBPUSD:"GBP/USD",USDJPY:"USD/JPY",AUDUSD:"AUD/USD",USDCAD:"USD/CAD",USDCHF:"USD/CHF",NZDUSD:"NZD/USD",EURJPY:"EUR/JPY",GBPJPY:"GBP/JPY",XAGUSD:"XAG/USD"})[symbol];
     const url = "https://api.twelvedata.com/price?symbol=" + encodeURIComponent(pair) + "&apikey=" + encodeURIComponent(apiKey);
     const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
     if (!response.ok) throw new Error("Forex price provider returned HTTP " + response.status);
@@ -175,7 +175,7 @@ export default async function handler(req, res) {
     const direction = String(body.direction || "").toUpperCase();
     const expiry = String(body.expiry || "1m");
     const amount = Number(body.amount ?? 1);
-    if (!ALLOWED_SYMBOLS.includes(symbol)) return send(res, 400, { ok: false, error: "Supported symbols: BTCUSDT, ETHUSDT, EURUSD, GBPUSD. Gold predictions remain disabled." });
+    if (!ALLOWED_SYMBOLS.includes(symbol)) return send(res, 400, { ok: false, error: "Unsupported symbol. Gold predictions remain disabled." });
     if (!["UP", "DOWN"].includes(direction)) return send(res, 400, { ok: false, error: "Direction must be UP or DOWN" });
     if (!Object.prototype.hasOwnProperty.call(EXPIRIES, expiry)) return send(res, 400, { ok: false, error: "Unsupported expiry" });
     if (!Number.isFinite(amount) || amount < 1 || amount > MAX_STAKE || Math.round(amount * 100) !== amount * 100) return send(res, 400, { ok: false, error: "Stake must be $1 to $1,000 with at most two decimal places" });
