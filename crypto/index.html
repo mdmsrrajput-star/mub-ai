@@ -300,6 +300,40 @@ function clearOrderBlockLines() {
   for (const line of orderBlockLines) { try { candleSeries.removePriceLine(line); } catch (_) {} }
   orderBlockLines = [];
 }
+const autoTradedZoneKeys = new Set();
+let autoZoneStartBusy = false;
+
+async function maybeAutoTradeZone(data, expectedSymbol, expectedTimeframe) {
+  if (paperExecutionMode !== "AUTO" || expectedSymbol !== symbol ||
+      expectedTimeframe !== timeframe || !["BTCUSDT","ETHUSDT"].includes(expectedSymbol) ||
+      autoZoneStartBusy || predictionRequestBusy) return;
+  const blocks = data && Array.isArray(data.orderBlocks) ? data.orderBlocks : [];
+  const valid = blocks.filter(b =>
+    Number.isFinite(Number(b.lower)) && Number.isFinite(Number(b.upper)) &&
+    ["BULLISH","BEARISH"].includes(b.direction));
+  if (!valid.length) return;
+  // Prefer a retested zone with a reaction; otherwise use the newest zone returned by the signal API.
+  const zone = valid.find(b => b.retested && b.reaction) || valid[0];
+  const key = [expectedSymbol, expectedTimeframe, zone.direction,
+    Number(zone.lower).toPrecision(12), Number(zone.upper).toPrecision(12)].join("|");
+  if (autoTradedZoneKeys.has(key)) return;
+  // Mark before starting to avoid duplicate orders during overlapping refreshes.
+  autoTradedZoneKeys.add(key);
+  autoZoneStartBusy = true;
+  const direction = zone.direction === "BULLISH" ? "UP" : "DOWN";
+  $("tradeSignalStatus").textContent = "AUTO PAPER: zone found (" + zone.direction +
+    "). Starting " + direction + " prediction for " + formatUsd(paperAmount) +
+    " · " + expiryLabels[paperExpiry] + ". One prediction per detected zone.";
+  try {
+    await startPaperPrediction({direction, autoZoneKey:key});
+  } catch (error) {
+    autoTradedZoneKeys.delete(key);
+    $("tradeSignalStatus").textContent = "AUTO PAPER START FAILED: " + error.message;
+  } finally {
+    autoZoneStartBusy = false;
+  }
+}
+
 function renderOrderBlocks(data, expectedSymbol) {
   if (expectedSymbol !== symbol) return;
   clearOrderBlockLines();
@@ -772,6 +806,7 @@ async function refreshSignal() {
 
     $("signalReasons").textContent=(data.reasons||[]).join(" · ");
     renderOrderBlocks(data, requestedSymbol);
+    await maybeAutoTradeZone(data, requestedSymbol, requestedChartTimeframe);
     setStatus("signalConnection", ageSeconds > 120 ? "STALE DATA" : "CONNECTED", ageSeconds <= 120);
   } catch(e) {
     if(requestGeneration !== signalRequestGeneration) return;
@@ -1118,7 +1153,7 @@ async function refreshPredictionAccount() {
     $("predictionStatus").textContent = "PAPER PREDICTION SERVICE UNAVAILABLE · " + error.message;
   }
 }
-async function startPaperPrediction() {
+async function startPaperPrediction(options = {}) {
   if (predictionRequestBusy) return;
   if (!["BTCUSDT","ETHUSDT"].includes(symbol)) {
     $("predictionStatus").textContent = "Gold and forex predictions are not enabled. Select BTC/USDT or ETH/USDT.";
@@ -1128,6 +1163,7 @@ async function startPaperPrediction() {
     $("predictionStatus").textContent = "Enter a valid stake from $1 to $1,000.";
     return;
   }
+  const tradeDirection = options.direction || paperDirection;
   predictionRequestBusy = true;
   $("startPredictionButton").disabled = true;
   $("startPredictionButton").textContent = "STARTING…";
@@ -1137,13 +1173,13 @@ async function startPaperPrediction() {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
-        action:"start", symbol, direction:paperDirection, expiry:paperExpiry, amount:paperAmount
+        action:"start", symbol, direction:tradeDirection, expiry:paperExpiry, amount:paperAmount
       })
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || "Could not start paper prediction");
     renderPredictionAccount(data);
-    $("predictionStatus").textContent = "PAPER PREDICTION STARTED · " + paperDirection + " · " +
+    $("predictionStatus").textContent = "PAPER PREDICTION STARTED · " + tradeDirection + " · " +
       expiryLabels[paperExpiry] + " · Stake " + formatUsd(paperAmount) + ". No real-money order placed.";
   } catch (error) {
     $("predictionStatus").textContent = "NOT STARTED · " + error.message;
@@ -1169,7 +1205,7 @@ function updatePaperTradeControls() {
       ? "Prediction settlement is paper-only; no real-money orders are possible."
       : "Fix the amount before starting a paper prediction.");
   $("tradeSignalStatus").textContent = paperExecutionMode === "AUTO"
-    ? "AUTO SIGNAL mode checks the current crypto signal. It never submits an order; only BTC/USDT and ETH/USDT are supported by the current signal backend."
+    ? "AUTO mode starts paper-only UP/DOWN predictions when a new order-block zone is detected on BTC/USDT or ETH/USDT. Direction follows bullish/bearish zone; selected stake and expiry are used. One prediction per zone; no real orders."
     : "MANUAL mode lets you select UP or DOWN. No order is submitted by changing these controls.";
 }
 
