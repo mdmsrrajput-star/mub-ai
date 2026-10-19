@@ -12,9 +12,9 @@ export default async function handler(req, res) {
   const symbol = String(req.query?.symbol || "BTCUSDT")
     .toUpperCase();
 
-  if (!["BTCUSDT", "ETHUSDT"].includes(symbol)) {
+  if (!["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT"].includes(symbol)) {
     return res.status(400).json({
-      error: "Supported symbols: BTCUSDT, ETHUSDT"
+      error: "Unsupported crypto symbol"
     });
   }
 
