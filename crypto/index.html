@@ -157,13 +157,21 @@ footer{text-align:center;padding:20px 12px}
     <div class="note section">MuB has no broker/exchange account connection or live-order authorization. This tab is informational only. No deposits, account credentials, or real orders can be handled here. Switch to Demo Account to continue paper trading.</div>
   </div>
 
-  <div class="controls section">
-    <button class="active" id="goldButton">GOLD · XAU/USD</button>
-    <button id="btcButton">BTC / USDT</button>
-    <button id="ethButton">ETH / USDT</button>
-    <button id="eurusdButton">EUR / USD</button>
-    <button id="gbpusdButton">GBP / USD</button>
-    <button id="refreshButton">Refresh now</button>
+  <div class="panel section" id="marketSelectorPanel">
+    <h2>Select market</h2>
+    <div class="grid">
+      <div><label class="label" for="metalsSelect">METALS</label><select id="metalsSelect" style="width:100%;padding:11px;border-radius:8px;background:#0b1020;color:var(--text);border:1px solid var(--border)">
+        <option value="XAUUSD">Gold · XAU/USD (spot view)</option><option value="XAGUSD">Silver · XAG/USD</option>
+      </select></div>
+      <div><label class="label" for="cryptoSelect">CRYPTO</label><select id="cryptoSelect" style="width:100%;padding:11px;border-radius:8px;background:#0b1020;color:var(--text);border:1px solid var(--border)">
+        <option value="BTCUSDT">Bitcoin · BTC/USDT</option><option value="ETHUSDT">Ethereum · ETH/USDT</option><option value="BNBUSDT">BNB/USDT</option><option value="SOLUSDT">Solana · SOL/USDT</option><option value="XRPUSDT">XRP/USDT</option><option value="ADAUSDT">Cardano · ADA/USDT</option><option value="DOGEUSDT">Dogecoin · DOGE/USDT</option>
+      </select></div>
+      <div><label class="label" for="forexSelect">FOREX</label><select id="forexSelect" style="width:100%;padding:11px;border-radius:8px;background:#0b1020;color:var(--text);border:1px solid var(--border)">
+        <option value="EURUSD">EUR/USD</option><option value="GBPUSD">GBP/USD</option><option value="USDJPY">USD/JPY</option><option value="AUDUSD">AUD/USD</option><option value="USDCAD">USD/CAD</option><option value="USDCHF">USD/CHF</option><option value="NZDUSD">NZD/USD</option><option value="EURJPY">EUR/JPY</option><option value="GBPJPY">GBP/JPY</option>
+      </select></div>
+    </div>
+    <div class="controls section"><button id="selectMarketButton" class="active">OPEN SELECTED MARKET</button><button id="refreshButton">Refresh now</button></div>
+    <div class="note">Market coverage depends on your data provider plan. All MuB predictions are simulated; real orders remain disabled.</div>
   </div>
 
   <div class="panel section" id="tradeControls">
@@ -357,6 +365,9 @@ let goldLastValue = null;
 
 let symbol = "BTCUSDT";
 let isForex = false;
+const CRYPTO_SYMBOLS = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT"];
+const FOREX_SYMBOLS = ["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY"];
+const METAL_SYMBOLS = ["XAGUSD"];
 let timeframe = "5m";
 let chart, candleSeries, volumeSeries;
 let marketSocket = null;
@@ -389,7 +400,7 @@ let autoZoneStartBusy = false;
 
 async function maybeAutoTradeZone(data, expectedSymbol, expectedTimeframe) {
   if (paperExecutionMode !== "AUTO" || expectedSymbol !== symbol ||
-      expectedTimeframe !== selectedAnalysisTimeframe() || !["BTCUSDT","ETHUSDT","EURUSD","GBPUSD"].includes(expectedSymbol) ||
+      expectedTimeframe !== selectedAnalysisTimeframe() || !(CRYPTO_SYMBOLS.includes(expectedSymbol) || FOREX_SYMBOLS.includes(expectedSymbol) || expectedSymbol === "XAGUSD") ||
       autoZoneStartBusy || predictionRequestBusy) return;
   const score = Number(data && data.score);
   const signal = String(data && data.signal || "").toUpperCase();
@@ -458,7 +469,7 @@ function renderOrderBlocks(data, expectedSymbol) {
   $("orderBlockDetails").textContent = labels.join(" | ") + ". CHART ZONES ONLY — these are heuristic price areas, NOT active trades or open positions.";
 }
 function symbolLabel(s) {
-  return ({BTCUSDT:"BTC / USDT",ETHUSDT:"ETH / USDT",EURUSD:"EUR / USD",GBPUSD:"GBP / USD"})[s] || s;
+  return ({BTCUSDT:"BTC / USDT",ETHUSDT:"ETH / USDT",BNBUSDT:"BNB / USDT",SOLUSDT:"SOL / USDT",XRPUSDT:"XRP / USDT",ADAUSDT:"ADA / USDT",DOGEUSDT:"DOGE / USDT",EURUSD:"EUR / USD",GBPUSD:"GBP / USD",USDJPY:"USD / JPY",AUDUSD:"AUD / USD",USDCAD:"USD / CAD",USDCHF:"USD / CHF",NZDUSD:"NZD / USD",EURJPY:"EUR / JPY",GBPJPY:"GBP / JPY",XAGUSD:"Silver · XAG/USD"})[s] || s;
 }
 
 async function refreshForexPrice() {
@@ -1107,12 +1118,14 @@ function setMarketView(isGold) {
 }
 
 async function selectSymbol(next) {
-  if (["EURUSD","GBPUSD"].includes(next)) {
+  if (FOREX_SYMBOLS.includes(next) || next === "XAGUSD") {
     if (changing) return;
     changing = true; symbol = next; isForex = true;
     if (["5s","15s","30s","3m"].includes(timeframe)) timeframe = "5m";
     analyticsGeneration++; signalRequestGeneration++;
-    ["goldButton","btcButton","ethButton","eurusdButton","gbpusdButton"].forEach(id => $(id).classList.toggle("active", id === (next === "EURUSD" ? "eurusdButton" : "gbpusdButton")));
+    $("forexSelect").value = FOREX_SYMBOLS.includes(next) ? next : $("forexSelect").value;
+    $("cryptoSelect").value = CRYPTO_SYMBOLS.includes(next) ? next : $("cryptoSelect").value;
+    $("metalsSelect").value = next === "XAGUSD" ? "XAGUSD" : $("metalsSelect").value;
     setMarketView(false); stopMarketSocket(); stopPriceSocket();
     setStatus("connection", "FOREX FEED", true);
     $("chartTitle").textContent = symbolLabel(symbol) + " · " + timeframe;
@@ -1165,18 +1178,17 @@ async function selectSymbol(next) {
     }
     return;
   }
-  if (!["BTCUSDT", "ETHUSDT"].includes(next) || (symbol === next && !$("chartTitle").closest(".panel").hidden) || changing) return;
+  if (!CRYPTO_SYMBOLS.includes(next) || (symbol === next && !$("chartTitle").closest(".panel").hidden) || changing) return;
   changing = true;
   symbol = next;
   isForex = false;
-  $("eurusdButton").classList.remove("active"); $("gbpusdButton").classList.remove("active");
+  
   analyticsGeneration++;
   $("depthImbalance").textContent="Loading "+symbolLabel(symbol)+" order book…";
   $("depthSummary").textContent="Switching market data…";
   $("depthRows").innerHTML="";
-  $("goldButton").classList.remove("active");
-  $("btcButton").classList.toggle("active", symbol === "BTCUSDT");
-  $("ethButton").classList.toggle("active", symbol === "ETHUSDT");
+  $("cryptoSelect").value = symbol;
+  $("forexSelect").value = FOREX_SYMBOLS.includes(symbol) ? symbol : $("forexSelect").value;
   setMarketView(false);
   $("chartTitle").textContent = symbolLabel(symbol) + " · " + timeframe;
   $("priceLabel").textContent = symbolLabel(symbol) + " · LIVE PRICE";
@@ -1381,8 +1393,8 @@ async function startPaperPrediction(options = {}) {
     return false;
   }
   if (predictionRequestBusy) return;
-  if (!["BTCUSDT","ETHUSDT","EURUSD","GBPUSD"].includes(symbol)) {
-    $("predictionStatus").textContent = "Gold and forex predictions are not enabled. Select BTC/USDT or ETH/USDT.";
+  if (!(CRYPTO_SYMBOLS.includes(symbol) || FOREX_SYMBOLS.includes(symbol) || symbol === "XAGUSD")) {
+    $("predictionStatus").textContent = "Selected market is not enabled for paper predictions. Gold remains spot-view only.";
     return;
   }
   if (!updatePaperAmount()) {
@@ -1475,13 +1487,9 @@ $("downButton").addEventListener("click", () => {
 });
 updatePaperTradeControls();
 
-$("goldButton").addEventListener("click",()=>selectSymbol("XAUUSD"));
-$("btcButton").addEventListener("click",()=>selectSymbol("BTCUSDT"));
-$("ethButton").addEventListener("click",()=>selectSymbol("ETHUSDT"));
-$("eurusdButton").addEventListener("click",()=>selectSymbol("EURUSD"));
-$("gbpusdButton").addEventListener("click",()=>selectSymbol("GBPUSD"));
-$("eurusdButton").addEventListener("click",()=>selectSymbol("EURUSD"));
-$("gbpusdButton").addEventListener("click",()=>selectSymbol("GBPUSD"));
+let selectedMarketCategory = "cryptoSelect";
+["metalsSelect","cryptoSelect","forexSelect"].forEach(id => $(id).addEventListener("change", () => { selectedMarketCategory = id; }));
+$("selectMarketButton").addEventListener("click", () => selectSymbol($(selectedMarketCategory).value));
 $("refreshButton").addEventListener("click",refreshAll);
 
 document.querySelectorAll("#timeframes button").forEach(b=>{
