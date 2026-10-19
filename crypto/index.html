@@ -271,7 +271,7 @@ footer{text-align:center;padding:20px 12px}
 
 const API = "https://data-api.binance.vision/api/v3";
 const WS = "wss://stream.binance.com:9443/ws/";
-const GOLD_API = "https://xaus.com/api/v1/spot?compact=1";
+const GOLD_API = "/api/gold-price";
 let goldLastValue = null;
 
 let symbol = "BTCUSDT";
@@ -464,9 +464,9 @@ async function refreshGoldFeed() {
     const stamp = state.as_of || data.updated_at;
     freshnessEl.textContent = "Feed: " + status.toUpperCase() +
       (Number.isFinite(age) ? " · age " + Math.round(age) + "s" : "") +
-      (stamp ? " · source time " + new Date(stamp).toLocaleTimeString() : "");
-    freshnessEl.className = "change " + (status === "fresh" ? "positive" : "negative");
-    if (status !== "fresh") freshnessEl.textContent += " · NOT FOR TRADE DECISIONS";
+      (stamp ? " · fetched " + new Date(stamp).toLocaleTimeString() : " · provider timestamp unavailable");
+    freshnessEl.className = "change " + (status === "received" || status === "fresh" ? "positive" : "negative");
+    if (status !== "fresh") freshnessEl.textContent += " · QUOTE RECEIVED; TIMESTAMP NOT VERIFIED";
   } catch (e) {
     priceEl.textContent = goldLastValue === null ? "FEED UNAVAILABLE" : "$" + money(goldLastValue) + " (last seen)";
     freshnessEl.textContent = "Gold feed error: " + e.message + " · Do not treat cached value as live.";
