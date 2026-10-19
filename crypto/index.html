@@ -374,7 +374,7 @@ function renderOrderBlocks(data, expectedSymbol) {
   const reacted=active.some(b=>b.retested && b.reaction);
   $("orderBlockValue").textContent = reacted ? "RETEST + REACTION DETECTED" : "ZONE FOUND · WAIT FOR CONFIRMATION";
   $("orderBlockValue").style.color = reacted ? "var(--green)" : "var(--blue)";
-  $("orderBlockDetails").textContent = labels.join(" | ") + ". Zones are heuristic price areas, not verified institutional orders.";
+  $("orderBlockDetails").textContent = labels.join(" | ") + ". CHART ZONES ONLY — these are heuristic price areas, NOT active trades or open positions.";
 }
 function symbolLabel(s) {
   return ({BTCUSDT:"BTC / USDT",ETHUSDT:"ETH / USDT",EURUSD:"EUR / USD",GBPUSD:"GBP / USD"})[s] || s;
@@ -831,7 +831,21 @@ let signalRequestGeneration = 0;
 let lastSuccessfulSignalAt = 0;
 
 async function refreshSignal() {
-  if (isForex) { try { await refreshForexSignal(); } catch(e) { $("signalValue").textContent="UNAVAILABLE"; $("signalScore").textContent=e.message; setStatus("signalConnection","ERROR",false); } return; }
+  if (isForex) {
+    try {
+      await refreshForexSignal();
+    } catch(e) {
+      $("signalValue").textContent = "UNAVAILABLE";
+      $("signalScore").textContent = e.message + " · No new forex prediction should be started from unavailable data.";
+      $("signalUpdated").textContent = "Waiting for a successful fresh analysis.";
+      $("signalReasons").textContent = "Forex feed unavailable or rate-limited; previous zones are not a current signal.";
+      clearOrderBlockLines();
+      $("orderBlockValue").textContent = "UNAVAILABLE · NOT A TRADE";
+      $("orderBlockDetails").textContent = "No current forex analysis. Any previous chart zones are stale analysis markers, not active trades or open positions.";
+      setStatus("signalConnection","ERROR",false);
+    }
+    return;
+  }
   const requestGeneration = ++signalRequestGeneration;
   const requestedSymbol = symbol;
   const requestedChartTimeframe = timeframe;
@@ -1318,8 +1332,8 @@ function updatePaperTradeControls() {
       ? "Prediction settlement is paper-only; no real-money orders are possible."
       : "Fix the amount before starting a paper prediction.");
   $("tradeSignalStatus").textContent = paperExecutionMode === "AUTO"
-    ? "AUTO paper-only mode analyses the selected expiry timeframe, requires a BUY/SELL score ≥70 and a matching order-block direction, then starts one prediction per matching zone. Chart timeframe is separate; no real orders."
-    : "MANUAL mode lets you select UP or DOWN. No order is submitted by changing these controls.";
+    ? "AUTO paper-only mode analyses the selected expiry timeframe, requires a fresh BUY/SELL score ≥70 and matching order-block direction, then starts one prediction per matching zone. If forex data is unavailable/rate-limited, no fresh forex prediction is allowed. Chart zones are not trades."
+    : "MANUAL mode lets you select UP or DOWN. No order is submitted by changing these controls. Chart zones are not trades.";
 }
 
 $("manualModeButton").addEventListener("click", () => {
