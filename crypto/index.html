@@ -76,7 +76,10 @@ footer{text-align:center;padding:20px 12px}
 <main>
   <div class="banner">PAPER MODE ACTIVE · REAL ORDER EXECUTION DISABLED</div>
 
-  <div class="panel section" id="tournamentPanel">
+  <div class="section" id="tournamentMenuWrap" hidden>
+    <button type="button" id="tournamentMenuToggle" aria-expanded="false">🏆 DAILY TOURNAMENT ▾</button>
+  </div>
+  <div class="panel section" id="tournamentPanel" hidden>
     <h2>🏆 MuB Daily Free Tournament</h2>
     <div class="note">100 free, non-purchasable tournament coins · 08:00–16:30 Europe/London · BTC/USDT and ETH/USDT demo predictions only.</div>
     <div class="grid section">
@@ -1570,6 +1573,21 @@ async function tournamentRefresh() {
   try {
     const [status] = await Promise.all([tournamentRequest("leaderboard", {}, "GET")]);
     const session = status.session || {};
+    const tournamentPanel = tournamentEl("tournamentPanel");
+    const tournamentMenuWrap = tournamentEl("tournamentMenuWrap");
+    const tournamentMenuToggle = tournamentEl("tournamentMenuToggle");
+    // During London session show the tournament panel directly; after 16:30,
+    // tuck it into a collapsible dropdown so it does not occupy the dashboard.
+    if (session.open) {
+      tournamentPanel.hidden = false;
+      tournamentMenuWrap.hidden = true;
+      tournamentMenuToggle.setAttribute("aria-expanded", "false");
+    } else {
+      tournamentPanel.hidden = !tournamentMenuToggle.dataset.expanded || tournamentMenuToggle.dataset.expanded !== "true";
+      tournamentMenuWrap.hidden = false;
+      tournamentMenuToggle.textContent = tournamentPanel.hidden ? "🏆 DAILY TOURNAMENT ▾" : "🏆 DAILY TOURNAMENT ▴";
+      tournamentMenuToggle.setAttribute("aria-expanded", String(!tournamentPanel.hidden));
+    }
     tournamentEl("tournamentSessionStatus").textContent = session.open ? "SESSION OPEN" : "SESSION CLOSED";
     tournamentEl("tournamentSessionStatus").className = "value " + (session.open ? "positive" : "negative");
     tournamentEl("tournamentSessionTimes").textContent = "Today: " + (session.startsAt || "08:00 Europe/London") + " → " + (session.endsAt || "16:30 Europe/London") + ". Coins reset for each new London calendar day.";
@@ -1594,6 +1612,15 @@ async function tournamentRefresh() {
     }
   }
 }
+tournamentEl("tournamentMenuToggle").addEventListener("click", () => {
+  const panel = tournamentEl("tournamentPanel");
+  const button = tournamentEl("tournamentMenuToggle");
+  const isOpening = panel.hidden;
+  panel.hidden = !isOpening;
+  button.dataset.expanded = String(isOpening);
+  button.textContent = isOpening ? "🏆 DAILY TOURNAMENT ▴" : "🏆 DAILY TOURNAMENT ▾";
+  button.setAttribute("aria-expanded", String(isOpening));
+});
 tournamentEl("tournamentRegisterTab").addEventListener("click", () => tournamentUpdateAuthMode("register"));
 tournamentEl("tournamentLoginTab").addEventListener("click", () => tournamentUpdateAuthMode("login"));
 tournamentEl("tournamentAuthSubmit").addEventListener("click", async () => {
