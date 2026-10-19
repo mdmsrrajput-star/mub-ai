@@ -242,7 +242,7 @@ footer{text-align:center;padding:20px 12px}
     <div class="panel">
       <div class="label">Signal API status</div>
       <div class="value" id="signalConnection">CONNECTING</div>
-      <div class="note">Refreshes every minute and on chart changes. Shows the last successful calculation time; stale or failed data is flagged.</div>
+      <div class="note">Refresh cadence follows the selected chart: 15s for 5s–1m charts, 30s for 3m–5m, 60s for longer charts. Signals use completed candles only.</div>
     </div>
     <div class="panel">
       <div class="label">Order execution</div>
@@ -962,6 +962,7 @@ async function changeTimeframe(tf) {
   if(changing || timeframe===tf) return;
   changing=true;
   timeframe=tf;
+  restartSignalRefreshTimer();
 
   document.querySelectorAll("#timeframes button").forEach(b=>{
     b.classList.toggle("active",b.dataset.tf===tf);
@@ -1222,7 +1223,18 @@ setInterval(()=>refreshGoldFeed().catch(()=>{}),120000);
 start();
 setInterval(()=>refresh24h().catch(()=>{}),60000);
 setInterval(()=>refreshOrderBook().catch(()=>{}),10000);
-setInterval(refreshSignal,60000);
+let signalRefreshTimer = null;
+function signalRefreshDelayMs(tf) {
+  // Refresh promptly, while signals still use completed candles only.
+  if (["5s","15s","30s","1m"].includes(tf)) return 15000;
+  if (["3m","5m"].includes(tf)) return 30000;
+  return 60000;
+}
+function restartSignalRefreshTimer() {
+  if (signalRefreshTimer !== null) clearInterval(signalRefreshTimer);
+  signalRefreshTimer = setInterval(() => { refreshSignal(); }, signalRefreshDelayMs(timeframe));
+}
+restartSignalRefreshTimer();
 </script>
 </body>
   </html>
