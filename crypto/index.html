@@ -1036,25 +1036,23 @@ function formatUsd(value) {
 function renderPredictionAccount(data) {
   const account = data && data.account ? data.account : {};
   $("predictionBalance").textContent = formatUsd(account.balance ?? 10000);
-  const active = account.active;
-  if (active && active.status === "PENDING") {
-    const seconds = Math.max(0, Math.ceil((Number(active.expiresAt) - Date.now()) / 1000));
-    $("predictionStatus").textContent = "PENDING · " + active.symbol + " · " + active.direction +
-      " · Stake " + formatUsd(active.stake) + " · Entry " + Number(active.entryPrice).toLocaleString("en-US", {maximumFractionDigits:8}) +
-      " · settles in " + seconds + "s. Keep this page open for prompt settlement.";
-    $("startPredictionButton").disabled = true;
-    $("startPredictionButton").textContent = "PREDICTION IN PROGRESS";
+  const activeList = Array.isArray(account.active)
+    ? account.active
+    : (account.active && account.active.status ? [account.active] : []);
+  const pending = activeList.filter(t => t && t.status === "PENDING");
+  // The start button remains available while earlier paper predictions are pending.
+  $("startPredictionButton").disabled = predictionRequestBusy || !["BTCUSDT","ETHUSDT"].includes(symbol);
+  $("startPredictionButton").textContent = ["BTCUSDT","ETHUSDT"].includes(symbol)
+    ? (predictionRequestBusy ? "STARTING…" : "START PAPER PREDICTION")
+    : "CRYPTO ONLY · SELECT BTC OR ETH";
+  if (pending.length) {
+    const nearest = pending.reduce((a,b) => Number(a.expiresAt) < Number(b.expiresAt) ? a : b);
+    const seconds = Math.max(0, Math.ceil((Number(nearest.expiresAt) - Date.now()) / 1000));
+    $("predictionStatus").textContent = pending.length + " PREDICTION(S) IN PROGRESS · " +
+      pending.map(t => t.symbol+" "+t.direction+" "+formatUsd(t.stake)).join(" · ") +
+      " · Next settles in " + seconds + "s. You can start another paper prediction.";
   } else {
-    $("startPredictionButton").disabled = predictionRequestBusy || !["BTCUSDT","ETHUSDT"].includes(symbol);
-    $("startPredictionButton").textContent = ["BTCUSDT","ETHUSDT"].includes(symbol) ? "START PAPER PREDICTION" : "CRYPTO ONLY · SELECT BTC OR ETH";
-    if (active && active.status === "SETTLED") {
-      $("predictionStatus").textContent = active.result + " · " + active.direction + " · Entry " +
-        Number(active.entryPrice).toLocaleString("en-US", {maximumFractionDigits:8}) + " · Exit " +
-        Number(active.exitPrice).toLocaleString("en-US", {maximumFractionDigits:8}) + " · P/L " + formatUsd(active.pnl) +
-        ". Settlement uses the first server price check at or after expiry.";
-    } else {
-      $("predictionStatus").textContent = "Ready · paper-only · 100% profit payout on a correct prediction; stake lost on an incorrect prediction.";
-    }
+    $("predictionStatus").textContent = "Ready · paper-only · 100% profit payout on a correct prediction; stake lost on an incorrect prediction.";
   }
   const history = Array.isArray(account.history) ? account.history : [];
   $("predictionHistory").textContent = history.length
