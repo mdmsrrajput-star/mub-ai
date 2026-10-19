@@ -76,6 +76,74 @@ footer{text-align:center;padding:20px 12px}
 <main>
   <div class="banner">PAPER MODE ACTIVE · REAL ORDER EXECUTION DISABLED</div>
 
+  <div class="panel section" id="tournamentPanel">
+    <h2>🏆 MuB Daily Free Tournament</h2>
+    <div class="note">100 free, non-purchasable tournament coins · 08:00–16:30 Europe/London · BTC/USDT and ETH/USDT demo predictions only.</div>
+    <div class="grid section">
+      <div class="panel">
+        <div class="label">TOURNAMENT STATUS</div>
+        <div class="value" id="tournamentSessionStatus">Checking London session…</div>
+        <div class="note" id="tournamentSessionTimes">Daily session: 08:00–16:30 Europe/London.</div>
+      </div>
+      <div class="panel">
+        <div class="label">YOUR TOURNAMENT COINS</div>
+        <div class="price" id="tournamentCoins">—</div>
+        <div class="note" id="tournamentRecord">Register or log in to view your score.</div>
+      </div>
+    </div>
+    <div class="panel section" id="tournamentAuthPanel">
+      <div class="controls">
+        <button type="button" id="tournamentRegisterTab" class="active">REGISTER</button>
+        <button type="button" id="tournamentLoginTab">LOG IN</button>
+      </div>
+      <label class="label section" for="tournamentDisplayName" id="tournamentNameLabel">Display name</label>
+      <input id="tournamentDisplayName" autocomplete="nickname" maxlength="24" placeholder="Choose a player name">
+      <label class="label section" for="tournamentEmail">Email</label>
+      <input id="tournamentEmail" type="email" autocomplete="email" placeholder="you@example.com">
+      <label class="label section" for="tournamentPassword">Password (10+ characters)</label>
+      <input id="tournamentPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Create a strong password">
+      <div class="controls section">
+        <button type="button" id="tournamentAuthSubmit" class="active">CREATE ACCOUNT</button>
+      </div>
+      <div class="note" id="tournamentAuthMessage" aria-live="polite">Password is processed on the server; never share it in chat.</div>
+    </div>
+    <div class="panel section" id="tournamentPlayPanel" hidden>
+      <div class="controls">
+        <button type="button" id="tournamentJoinButton" class="active">JOIN TODAY · FREE</button>
+        <button type="button" id="tournamentLogoutButton">LOG OUT</button>
+      </div>
+      <div class="label section">Tournament prediction</div>
+      <div class="controls section" role="group" aria-label="Tournament asset">
+        <button type="button" id="tournamentBTCButton" class="active">BTC/USDT</button>
+        <button type="button" id="tournamentETHButton">ETH/USDT</button>
+      </div>
+      <div class="controls section" role="group" aria-label="Tournament direction">
+        <button type="button" id="tournamentUpButton" class="active">▲ UP</button>
+        <button type="button" id="tournamentDownButton">▼ DOWN</button>
+      </div>
+      <div class="controls section" role="group" aria-label="Tournament expiry">
+        <button type="button" id="tournament1mButton" class="active">1 MIN</button>
+        <button type="button" id="tournament5mButton">5 MIN</button>
+      </div>
+      <label class="label section" for="tournamentStake">Stake (1–20 coins)</label>
+      <input id="tournamentStake" type="number" min="1" max="20" step="1" value="5" inputmode="numeric">
+      <div class="controls section">
+        <button type="button" id="tournamentPlayButton" class="active">SUBMIT DEMO PREDICTION</button>
+        <button type="button" id="tournamentRefreshButton">REFRESH SCORE</button>
+      </div>
+      <div class="note" id="tournamentPlayMessage" aria-live="polite">Join the daily tournament before making predictions. No deposits or real trades.</div>
+    </div>
+    <div class="panel section">
+      <div class="label">TODAY'S LEADERBOARD</div>
+      <div id="tournamentLeaderboard" class="note">Loading leaderboard…</div>
+    </div>
+    <div class="panel section">
+      <div class="label">PRIZE STATUS</div>
+      <div class="value">UP TO $25 · PENDING REVIEW</div>
+      <div class="note">Any prize is subject to verified results, eligibility, anti-fraud, applicable legal/compliance review and payment setup. Real-money payouts are disabled; no prize is promised or credited by this build.</div>
+    </div>
+  </div>
+
   <div class="controls section" role="tablist" aria-label="Account type">
     <button type="button" id="demoAccountTab" class="active" role="tab" aria-selected="true">DEMO ACCOUNT</button>
     <button type="button" id="realAccountTab" role="tab" aria-selected="false">REAL ACCOUNT · LOCKED</button>
@@ -1452,6 +1520,163 @@ function restartSignalRefreshTimer() {
   signalRefreshTimer = setInterval(() => { refreshSignal(); }, signalRefreshDelayMs(timeframe));
 }
 restartSignalRefreshTimer();
+
+
+// MuB Daily Tournament UI. Tournament scoring and price validation are server-side.
+let tournamentAuthMode = "register";
+let tournamentSymbol = "BTCUSDT";
+let tournamentDirection = "UP";
+let tournamentExpirySeconds = 60;
+let tournamentSignedIn = false;
+function tournamentEl(id) { return document.getElementById(id); }
+async function tournamentRequest(action, payload = {}, method = "POST") {
+  const url = method === "GET" ? "/api/tournament?action=" + encodeURIComponent(action) : "/api/tournament";
+  const response = await fetch(url, {
+    method,
+    credentials: "same-origin",
+    headers: method === "GET" ? { "Accept": "application/json" } : { "Content-Type": "application/json", "Accept": "application/json" },
+    body: method === "GET" ? undefined : JSON.stringify({ action, ...payload })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(data.error || "Tournament request failed.");
+  return data;
+}
+function tournamentShowSignedIn(user) {
+  tournamentSignedIn = true;
+  tournamentEl("tournamentAuthPanel").hidden = true;
+  tournamentEl("tournamentPlayPanel").hidden = false;
+  tournamentEl("tournamentCoins").textContent = Number(user.coins || 0) + " coins";
+  tournamentEl("tournamentRecord").textContent = "Wins: " + (user.wins || 0) + " · Losses: " + (user.losses || 0) + " · Pending: " + (user.pending || 0);
+}
+function tournamentShowSignedOut() {
+  tournamentSignedIn = false;
+  tournamentEl("tournamentAuthPanel").hidden = false;
+  tournamentEl("tournamentPlayPanel").hidden = true;
+  tournamentEl("tournamentCoins").textContent = "—";
+  tournamentEl("tournamentRecord").textContent = "Register or log in to view your score.";
+}
+function tournamentUpdateAuthMode(mode) {
+  tournamentAuthMode = mode;
+  const registering = mode === "register";
+  tournamentEl("tournamentRegisterTab").classList.toggle("active", registering);
+  tournamentEl("tournamentLoginTab").classList.toggle("active", !registering);
+  tournamentEl("tournamentNameLabel").hidden = !registering;
+  tournamentEl("tournamentDisplayName").hidden = !registering;
+  tournamentEl("tournamentPassword").autocomplete = registering ? "new-password" : "current-password";
+  tournamentEl("tournamentAuthSubmit").textContent = registering ? "CREATE ACCOUNT" : "LOG IN";
+  tournamentEl("tournamentAuthMessage").textContent = registering ? "Use a unique password. Never share it in chat." : "Log in with your tournament account.";
+}
+async function tournamentRefresh() {
+  try {
+    const [status] = await Promise.all([tournamentRequest("leaderboard", {}, "GET")]);
+    const session = status.session || {};
+    tournamentEl("tournamentSessionStatus").textContent = session.open ? "SESSION OPEN" : "SESSION CLOSED";
+    tournamentEl("tournamentSessionStatus").className = "value " + (session.open ? "positive" : "negative");
+    tournamentEl("tournamentSessionTimes").textContent = "Today: " + (session.startsAt || "08:00 Europe/London") + " → " + (session.endsAt || "16:30 Europe/London") + ". Coins reset for each new London calendar day.";
+    const rows = status.leaderboard || [];
+    tournamentEl("tournamentLeaderboard").textContent = rows.length
+      ? rows.map(row => "#" + row.rank + "  " + row.displayName + " — " + row.coins + " coins · W " + row.wins + " / L " + row.losses).join("\n")
+      : "No joined players yet today. Be the first to join.";
+    tournamentEl("tournamentLeaderboard").style.whiteSpace = "pre-line";
+  } catch (error) {
+    tournamentEl("tournamentSessionStatus").textContent = "SERVICE UNAVAILABLE";
+    tournamentEl("tournamentLeaderboard").textContent = error.message;
+  }
+  if (tournamentSignedIn) {
+    try {
+      const me = await tournamentRequest("me", {}, "GET");
+      tournamentShowSignedIn(me.user);
+      tournamentEl("tournamentJoinButton").textContent = me.user.joined ? "JOINED TODAY ✓" : "JOIN TODAY · FREE";
+      tournamentEl("tournamentJoinButton").disabled = !!me.user.joined;
+    } catch (error) {
+      tournamentShowSignedOut();
+      tournamentEl("tournamentAuthMessage").textContent = error.message;
+    }
+  }
+}
+tournamentEl("tournamentRegisterTab").addEventListener("click", () => tournamentUpdateAuthMode("register"));
+tournamentEl("tournamentLoginTab").addEventListener("click", () => tournamentUpdateAuthMode("login"));
+tournamentEl("tournamentAuthSubmit").addEventListener("click", async () => {
+  const button = tournamentEl("tournamentAuthSubmit");
+  button.disabled = true;
+  tournamentEl("tournamentAuthMessage").textContent = "Please wait…";
+  try {
+    const payload = { email: tournamentEl("tournamentEmail").value, password: tournamentEl("tournamentPassword").value };
+    if (tournamentAuthMode === "register") payload.displayName = tournamentEl("tournamentDisplayName").value;
+    const data = await tournamentRequest(tournamentAuthMode, payload);
+    tournamentShowSignedIn(data.user);
+    tournamentEl("tournamentAuthMessage").textContent = data.message || "Signed in.";
+    await tournamentRefresh();
+  } catch (error) {
+    tournamentEl("tournamentAuthMessage").textContent = error.message;
+  } finally { button.disabled = false; }
+});
+tournamentEl("tournamentJoinButton").addEventListener("click", async () => {
+  const button = tournamentEl("tournamentJoinButton"); button.disabled = true;
+  try {
+    const data = await tournamentRequest("join");
+    tournamentShowSignedIn(data.user);
+    tournamentEl("tournamentPlayMessage").textContent = data.message;
+    await tournamentRefresh();
+  } catch (error) { tournamentEl("tournamentPlayMessage").textContent = error.message; }
+  finally { button.disabled = false; }
+});
+tournamentEl("tournamentLogoutButton").addEventListener("click", async () => {
+  try { await tournamentRequest("logout"); } catch {}
+  tournamentShowSignedOut();
+  tournamentEl("tournamentAuthMessage").textContent = "You are logged out.";
+});
+tournamentEl("tournamentBTCButton").addEventListener("click", () => {
+  tournamentSymbol = "BTCUSDT";
+  tournamentEl("tournamentBTCButton").classList.add("active");
+  tournamentEl("tournamentETHButton").classList.remove("active");
+});
+tournamentEl("tournamentETHButton").addEventListener("click", () => {
+  tournamentSymbol = "ETHUSDT";
+  tournamentEl("tournamentETHButton").classList.add("active");
+  tournamentEl("tournamentBTCButton").classList.remove("active");
+});
+tournamentEl("tournamentUpButton").addEventListener("click", () => {
+  tournamentDirection = "UP";
+  tournamentEl("tournamentUpButton").classList.add("active");
+  tournamentEl("tournamentDownButton").classList.remove("active");
+});
+tournamentEl("tournamentDownButton").addEventListener("click", () => {
+  tournamentDirection = "DOWN";
+  tournamentEl("tournamentDownButton").classList.add("active");
+  tournamentEl("tournamentUpButton").classList.remove("active");
+});
+tournamentEl("tournament1mButton").addEventListener("click", () => {
+  tournamentExpirySeconds = 60;
+  tournamentEl("tournament1mButton").classList.add("active");
+  tournamentEl("tournament5mButton").classList.remove("active");
+});
+tournamentEl("tournament5mButton").addEventListener("click", () => {
+  tournamentExpirySeconds = 300;
+  tournamentEl("tournament5mButton").classList.add("active");
+  tournamentEl("tournament1mButton").classList.remove("active");
+});
+tournamentEl("tournamentPlayButton").addEventListener("click", async () => {
+  const button = tournamentEl("tournamentPlayButton"); button.disabled = true;
+  tournamentEl("tournamentPlayMessage").textContent = "Fetching fresh market price and submitting demo prediction…";
+  try {
+    const data = await tournamentRequest("play", {
+      symbol: tournamentSymbol,
+      direction: tournamentDirection,
+      stake: Number(tournamentEl("tournamentStake").value),
+      expirySeconds: tournamentExpirySeconds
+    });
+    tournamentShowSignedIn(data.user);
+    tournamentEl("tournamentPlayMessage").textContent = data.message;
+    await tournamentRefresh();
+  } catch (error) { tournamentEl("tournamentPlayMessage").textContent = error.message; }
+  finally { button.disabled = false; }
+});
+tournamentEl("tournamentRefreshButton").addEventListener("click", tournamentRefresh);
+tournamentUpdateAuthMode("register");
+tournamentRefresh();
+setInterval(tournamentRefresh, 15000);
+
 </script>
 </body>
   </html>
