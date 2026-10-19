@@ -2,7 +2,7 @@ const STATE_KEY = "mub:paper:prediction:v1";
 const STARTING_BALANCE = 10000;
 const MAX_STAKE = 1000;
 const PAYOUT_RATE = 1.0;
-const ALLOWED_SYMBOLS = ["BTCUSDT", "ETHUSDT"];
+const ALLOWED_SYMBOLS = ["BTCUSDT", "ETHUSDT", "EURUSD", "GBPUSD"];
 const EXPIRIES = { "1m": 60000, "3m": 180000, "5m": 300000, "15m": 900000, "30m": 1800000, "1h": 3600000 };
 
 function send(res, status, data) {
@@ -30,36 +30,33 @@ async function redisCommand(command) {
   return data.result;
 }
 async function getPrice(symbol) {
-  if (!ALLOWED_SYMBOLS.includes(symbol)) throw new Error("Only BTC/USDT and ETH/USDT predictions are enabled");
-  // Try multiple public Binance market-data hosts. A failure on one hostname
-  // (regional routing, transient outage, or rate limiting) should not block a paper entry.
-  const hosts = [
-    "https://api.binance.com",
-    "https://api1.binance.com",
-    "https://api2.binance.com",
-    "https://api3.binance.com",
-    "https://data-api.binance.vision"
-  ];
+  if (!ALLOWED_SYMBOLS.includes(symbol)) throw new Error("Supported symbols: BTCUSDT, ETHUSDT, EURUSD, GBPUSD");
+  if (symbol === "EURUSD" || symbol === "GBPUSD") {
+    const apiKey = process.env.TWELVE_DATA_API_KEY;
+    if (!apiKey) throw new Error("Forex data is not configured. Add TWELVE_DATA_API_KEY in Vercel environment variables.");
+    const pair = symbol === "EURUSD" ? "EUR/USD" : "GBP/USD";
+    const url = "https://api.twelvedata.com/price?symbol=" + encodeURIComponent(pair) + "&apikey=" + encodeURIComponent(apiKey);
+    const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) throw new Error("Forex price provider returned HTTP " + response.status);
+    const data = await response.json();
+    if (data && data.status === "error") throw new Error("Forex provider error: " + String(data.message || "request failed").slice(0, 180));
+    const price = Number(data && data.price);
+    if (!Number.isFinite(price) || price <= 0) throw new Error("Forex price response invalid; prediction not started");
+    return price;
+  }
+  const hosts = ["https://api.binance.com", "https://api1.binance.com", "https://api2.binance.com", "https://api3.binance.com", "https://data-api.binance.vision"];
   let lastError = "Market price unavailable; prediction not started";
   for (const host of hosts) {
     try {
-      const response = await fetch(`${host}/api/v3/ticker/price?symbol=${symbol}`, {
-        headers: { Accept: "application/json" },
-        cache: "no-store"
-      });
-      if (!response.ok) {
-        lastError = `Market price host returned HTTP ${response.status}`;
-        continue;
-      }
+      const response = await fetch(host + "/api/v3/ticker/price?symbol=" + encodeURIComponent(symbol), { headers: { Accept: "application/json" }, cache: "no-store" });
+      if (!response.ok) { lastError = "Market price host returned HTTP " + response.status; continue; }
       const data = await response.json();
       const price = Number(data && data.price);
       if (Number.isFinite(price) && price > 0) return price;
       lastError = "Market price response was invalid";
-    } catch (error) {
-      lastError = error && error.message ? error.message : "Market price request failed";
-    }
+    } catch (error) { lastError = error && error.message ? error.message : "Market price request failed"; }
   }
-  throw new Error(`Market price unavailable; prediction not started (${lastError})`);
+  throw new Error("Market price unavailable; prediction not started (" + lastError + ")");
 }
 const LUA = `
 local raw = redis.call("GET", KEYS[1])
