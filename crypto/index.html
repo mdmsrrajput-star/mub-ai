@@ -80,6 +80,8 @@ footer{text-align:center;padding:20px 12px}
     <button class="active" id="goldButton">GOLD · XAU/USD</button>
     <button id="btcButton">BTC / USDT</button>
     <button id="ethButton">ETH / USDT</button>
+    <button id="eurusdButton">EUR / USD</button>
+    <button id="gbpusdButton">GBP / USD</button>
     <button id="refreshButton">Refresh now</button>
   </div>
 
@@ -273,6 +275,7 @@ const GOLD_API = "https://xaus.com/api/v1/spot?compact=1";
 let goldLastValue = null;
 
 let symbol = "BTCUSDT";
+let isForex = false;
 let timeframe = "5m";
 let chart, candleSeries, volumeSeries;
 let marketSocket = null;
@@ -305,7 +308,7 @@ let autoZoneStartBusy = false;
 
 async function maybeAutoTradeZone(data, expectedSymbol, expectedTimeframe) {
   if (paperExecutionMode !== "AUTO" || expectedSymbol !== symbol ||
-      expectedTimeframe !== timeframe || !["BTCUSDT","ETHUSDT"].includes(expectedSymbol) ||
+      expectedTimeframe !== timeframe || !["BTCUSDT","ETHUSDT","EURUSD","GBPUSD"].includes(expectedSymbol) ||
       autoZoneStartBusy || predictionRequestBusy) return;
   const blocks = data && Array.isArray(data.orderBlocks) ? data.orderBlocks : [];
   const valid = blocks.filter(b =>
@@ -361,7 +364,7 @@ function renderOrderBlocks(data, expectedSymbol) {
   $("orderBlockDetails").textContent = labels.join(" | ") + ". Zones are heuristic price areas, not verified institutional orders.";
 }
 function symbolLabel(s) {
-  return s === "BTCUSDT" ? "BTC / USDT" : "ETH / USDT";
+  return ({BTCUSDT:"BTC / USDT",ETHUSDT:"ETH / USDT",EURUSD:"EUR / USD",GBPUSD:"GBP / USD"})[s] || s;
 }
 function compactNumber(n) {
   return Number(n).toLocaleString("en-US",{notation:"compact",maximumFractionDigits:2});
@@ -1156,7 +1159,7 @@ async function refreshPredictionAccount() {
 }
 async function startPaperPrediction(options = {}) {
   if (predictionRequestBusy) return;
-  if (!["BTCUSDT","ETHUSDT"].includes(symbol)) {
+  if (!["BTCUSDT","ETHUSDT","EURUSD","GBPUSD"].includes(symbol)) {
     $("predictionStatus").textContent = "Gold and forex predictions are not enabled. Select BTC/USDT or ETH/USDT.";
     return;
   }
@@ -1234,6 +1237,8 @@ updatePaperTradeControls();
 $("goldButton").addEventListener("click",()=>selectSymbol("XAUUSD"));
 $("btcButton").addEventListener("click",()=>selectSymbol("BTCUSDT"));
 $("ethButton").addEventListener("click",()=>selectSymbol("ETHUSDT"));
+$("eurusdButton").addEventListener("click",()=>selectSymbol("EURUSD"));
+$("gbpusdButton").addEventListener("click",()=>selectSymbol("GBPUSD"));
 $("refreshButton").addEventListener("click",refreshAll);
 
 document.querySelectorAll("#timeframes button").forEach(b=>{
