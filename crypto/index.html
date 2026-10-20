@@ -384,8 +384,11 @@ footer{padding:14px 10px}
       <span>PAST PREDICTIONS <span id="predictionHistoryCount" class="note">· loading</span></span>
       <span id="predictionHistoryChevron" aria-hidden="true">▾</span>
     </button>
-    <div class="note">Tap to open settled UP / DOWN paper predictions, including entry/exit prices and P/L.</div>
+    <div class="note">Open positions and settled UP / DOWN paper predictions, including entry/exit prices and P/L.</div>
     <div id="predictionHistoryDropdown" class="section" hidden>
+      <div class="label">OPEN PREDICTIONS</div>
+      <div id="openPredictionList" class="section"><div class="note">Loading open predictions…</div></div>
+      <div class="label section">CLOSED PREDICTIONS</div>
       <div id="predictionTradeHistoryList">
         <div class="note">Loading prediction history…</div>
       </div>
@@ -1633,6 +1636,35 @@ function renderPredictionAccount(data) {
     ? account.active
     : (account.active && account.active.status ? [account.active] : []);
   const pending = activeList.filter(t => t && t.status === "PENDING");
+  const openList = $("openPredictionList");
+  if (openList) {
+    openList.replaceChildren();
+    if (!pending.length) {
+      const empty = document.createElement("div");
+      empty.className = "note";
+      empty.textContent = "No open predictions. New active paper trades will appear here.";
+      openList.appendChild(empty);
+    } else {
+      pending.forEach(t => {
+        const row = document.createElement("div");
+        row.style.cssText = "padding:10px 0;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr auto;gap:8px";
+        const left = document.createElement("div");
+        const title = document.createElement("div");
+        title.style.fontWeight = "700";
+        title.textContent = (t.symbol || "") + " · " + (t.direction || "") + " · OPEN";
+        const details = document.createElement("div");
+        details.className = "note";
+        const remaining = Math.max(0,Math.ceil((Number(t.expiresAt)-Date.now())/1000));
+        details.textContent = "Stake " + formatUsd(t.stake) + " · Entry " + Number(t.entryPrice||0).toLocaleString("en-US",{maximumFractionDigits:8}) + " · Expires in " + remaining + "s";
+        const right = document.createElement("div");
+        right.style.cssText = "text-align:right;font-weight:700;color:var(--blue)";
+        right.textContent = "PENDING";
+        left.append(title,details);
+        row.append(left,right);
+        openList.appendChild(row);
+      });
+    }
+  }
   // The start button remains available while earlier paper predictions are pending.
   $("startPredictionButton").disabled = predictionRequestBusy || !["BTCUSDT","ETHUSDT"].includes(symbol);
   $("startPredictionButton").textContent = ["BTCUSDT","ETHUSDT"].includes(symbol)
@@ -1935,17 +1967,19 @@ async function tournamentRefresh() {
     const tournamentPanel = tournamentEl("tournamentPanel");
     const tournamentMenuWrap = tournamentEl("tournamentMenuWrap");
     const tournamentMenuToggle = tournamentEl("tournamentMenuToggle");
-    // During London session show the tournament panel directly; after 16:30,
-    // tuck it into a collapsible dropdown so it does not occupy the dashboard.
-    if (session.open) {
+    // The main account selector controls visibility. Do not let background
+    // score refreshes hide the tournament panel while the user is interacting.
+    const tournamentSelected = $("accountSelector")?.value === "TOURNAMENT";
+    tournamentMenuWrap.hidden = tournamentSelected || session.open;
+    if (tournamentSelected) {
       tournamentPanel.hidden = false;
-      tournamentMenuWrap.hidden = true;
-      tournamentMenuToggle.setAttribute("aria-expanded", "false");
+    } else if (session.open) {
+      tournamentPanel.hidden = true;
     } else {
-      tournamentPanel.hidden = !tournamentMenuToggle.dataset.expanded || tournamentMenuToggle.dataset.expanded !== "true";
-      tournamentMenuWrap.hidden = false;
-      tournamentMenuToggle.textContent = tournamentPanel.hidden ? "🏆 DAILY TOURNAMENT ▾" : "🏆 DAILY TOURNAMENT ▴";
-      tournamentMenuToggle.setAttribute("aria-expanded", String(!tournamentPanel.hidden));
+      const expanded = tournamentMenuToggle.dataset.expanded === "true";
+      tournamentPanel.hidden = !expanded;
+      tournamentMenuToggle.textContent = expanded ? "🏆 DAILY TOURNAMENT ▴" : "🏆 DAILY TOURNAMENT ▾";
+      tournamentMenuToggle.setAttribute("aria-expanded", String(expanded));
     }
     tournamentEl("tournamentSessionStatus").textContent = session.open ? "SESSION OPEN" : "SESSION CLOSED";
     tournamentEl("tournamentSessionStatus").className = "value " + (session.open ? "positive" : "negative");
@@ -2101,7 +2135,21 @@ tournamentEl("tournamentPlayButton").addEventListener("click", async () => {
   } catch (error) { tournamentEl("tournamentPlayMessage").textContent = error.message; }
   finally { button.disabled = false; }
 });
-tournamentEl("tournamentRefreshButton").addEventListener("click", tournamentRefresh);
+tournamentEl("tournamentRefreshButton").addEventListener("click", async () => {
+  const button=tournamentEl("tournamentRefreshButton");
+  const previous=button.textContent;
+  button.disabled=true; button.textContent="REFRESHING…";
+  tournamentEl("tournamentPlayMessage").textContent="Refreshing your tournament balance, record and leaderboard…";
+  try {
+    const me=await tournamentRequest("me",{}, "GET");
+    tournamentShowSignedIn(me.user);
+    updateTournamentCoinBadge(me.user);
+    await tournamentRefresh();
+    tournamentEl("tournamentPlayMessage").textContent="Score refreshed · "+Number(me.user.coins||0)+" T · Wins "+Number(me.user.wins||0)+" · Losses "+Number(me.user.losses||0)+" · Pending "+Number(me.user.pending||0)+".";
+  } catch(error) {
+    tournamentEl("tournamentPlayMessage").textContent=error.message || "Could not refresh score. Please sign in again if your session expired.";
+  } finally { button.disabled=false; button.textContent=previous; }
+});
 
 /* Unified account selector: each account has its own balance and trade controls. */
 let tournamentExecutionMode = "MANUAL";
