@@ -1496,7 +1496,17 @@ async function startPaperPrediction(options = {}) {
     await refreshPredictionAccount();
   }
 }
-$("startPredictionButton").addEventListener("click", startPaperPrediction);
+$("startPredictionButton").addEventListener("click", () => {
+  if (paperExecutionMode === "AUTO") {
+    // Never fall back to the manually selected direction in AUTO mode.
+    // Auto entries must be triggered only by fresh signal + aligned zone analysis.
+    $("predictionStatus").textContent = "AUTO MODE · Direction is chosen from the fresh BUY/SELL signal and matching order-block direction. The manual UP/DOWN selection is ignored. Checking signal…";
+    $("tradeSignalStatus").textContent = "AUTO CHECK · Waiting for a fresh signal and matching zone. No prediction is submitted from the default UP button.";
+    refreshSignal();
+    return;
+  }
+  startPaperPrediction();
+});
 refreshPredictionAccount();
 predictionPollHandle = setInterval(refreshPredictionAccount, 2500);
 
