@@ -1474,7 +1474,10 @@ async function startPaperPrediction(options = {}) {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
-        action:"start", symbol, direction:tradeDirection, expiry:paperExpiry, amount:paperAmount
+        action:"start", symbol, direction:tradeDirection, expiry:paperExpiry, amount:paperAmount,
+        ...(options.autoZoneKey ? {
+          idempotencyKey: ["auto", symbol, options.autoZoneKey, paperExpiry].join("|")
+        } : {})
       })
     });
     const data = await response.json();
