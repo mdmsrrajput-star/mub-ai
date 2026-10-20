@@ -1,4 +1,6 @@
-const STATE_KEY = "mub:paper:prediction:v1";
+const STATE_KEY = "mub:paper:shared:v1";
+const LEGACY_PREDICTION_KEY = "mub:paper:prediction:v1";
+const LEGACY_SPOT_KEY = "mub:paper:account:v1";
 const STARTING_BALANCE = 10000;
 const MAX_STAKE = 1000;
 const PAYOUT_RATE = 1.0;
@@ -61,10 +63,30 @@ async function getPrice(symbol) {
 const LUA = `
 local raw = redis.call("GET", KEYS[1])
 local s
-if raw then s = cjson.decode(raw) else
- s = { balance = 10000, active = {}, history = {} }
+if raw then
+ s = cjson.decode(raw)
+else
+ -- One-time migration: preserve prediction history and balance, plus spot trade
+ -- records/positions. Spot P/L is applied as the change from its original $10k.
+ local predRaw = redis.call("GET", KEYS[2])
+ local spotRaw = redis.call("GET", KEYS[3])
+ local pred = predRaw and cjson.decode(predRaw) or {}
+ local spot = spotRaw and cjson.decode(spotRaw) or {}
+ local predBalance = tonumber(pred.balance) or 10000
+ local spotCash = tonumber(spot.cash) or 10000
+ local sharedCash = predBalance + (spotCash - 10000)
+ s = {
+  balance = sharedCash, cash = sharedCash,
+  active = pred.active or {}, history = pred.history or {},
+  positions = spot.positions or {}, trades = spot.trades or {},
+  realizedPnl = tonumber(spot.realizedPnl) or 0
+ }
 end
 if not s.history then s.history = {} end
+if not s.positions then s.positions = {} end
+if not s.trades then s.trades = {} end
+if not s.cash then s.cash = tonumber(s.balance) or 10000 end
+if not s.balance then s.balance = tonumber(s.cash) or 10000 end
 -- Migrate the older single-active-prediction format to an array.
 if type(s.active) == "table" and s.active.status then s.active = { s.active } end
 if type(s.active) ~= "table" then s.active = {} end
@@ -91,7 +113,8 @@ if action == "start" then
  end
  if tonumber(s.balance or 0) < amount then return redis.error_reply("Insufficient available paper balance") end
  -- Deduct the stake immediately when the paper order is accepted.
- s.balance = tonumber(s.balance or 10000) - amount
+ s.balance = tonumber(s.balance or s.cash or 10000) - amount
+ s.cash = s.balance
  table.insert(s.active, {
   id = p.id, idempotencyKey = p.idempotencyKey, symbol = p.symbol, direction = p.direction, stake = amount,
   expiry = p.expiry, entryPrice = tonumber(p.price), startedAt = tonumber(p.now),
@@ -118,7 +141,8 @@ if action == "settle" then
    -- the stake plus equal profit; on a loss, no further balance deduction.
    -- Preserve the previous settlement behavior for legacy pending trades.
    if a.stakeDeducted then
-    if won then s.balance = tonumber(s.balance or 0) + (stake * 2) end
+    if won then s.balance = tonumber(s.balance or s.cash or 0) + (stake * 2) end
+    s.cash = s.balance
    else
     s.balance = tonumber(s.balance or 10000) + pnl
    end
