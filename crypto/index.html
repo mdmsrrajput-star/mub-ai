@@ -6,65 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b1020">
 <title>MuB Crypto Intelligence</title>
-<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js">
-/* Compact dashboard shortcuts */
-function syncQuickDemoBalance() {
-  const source = $("predictionBalance");
-  if (source && $("quickDemoBalance")) $("quickDemoBalance").textContent = source.textContent || "$10,000.00";
-}
-const quickBalanceObserver = new MutationObserver(syncQuickDemoBalance);
-if ($("predictionBalance")) quickBalanceObserver.observe($("predictionBalance"), {childList:true,subtree:true,characterData:true});
-$("refreshDemoButton")?.addEventListener("click", async () => {
-  const button=$("refreshDemoButton");
-  button.disabled=true; button.textContent="…";
-  $("quickDemoStatus").textContent="Refreshing simulated balance…";
-  try {
-    await refreshPredictionAccount();
-    await refreshPaperAccount();
-    syncQuickDemoBalance();
-    $("quickDemoStatus").textContent="Demo balance refreshed · no real funds changed";
-  } catch (_) {
-    $("quickDemoStatus").textContent="Could not refresh now. Try again shortly.";
-  } finally { button.disabled=false; button.textContent="↻"; }
-});
-$("depositInfoButton")?.addEventListener("click", () => {
-  alert("Deposits are not enabled in MuB. This is a paper-trading demo; no real funds can be deposited or withdrawn here.");
-});
-$("addMarketButton")?.addEventListener("click", () => {
-  $("marketSelectorPanel").scrollIntoView({behavior:"smooth",block:"start"});
-  $("marketSelectorPanel").style.outline="2px solid var(--blue)";
-  setTimeout(()=>{$("marketSelectorPanel").style.outline="";},1200);
-});
-$("quickDemoTab")?.addEventListener("click", () => $("demoAccountTab").click());
-$("quickRealTab")?.addEventListener("click", () => $("realAccountTab").click());
-$("newsButton")?.addEventListener("click", () => { $("newsPanel").hidden=!$("newsPanel").hidden; });
-$("chartNewsButton")?.addEventListener("click", () => { $("newsPanel").hidden=false; $("newsPanel").scrollIntoView({behavior:"smooth",block:"center"}); });
-$("openNewsSource")?.addEventListener("click", () => window.open("https://www.reuters.com/markets/","_blank","noopener,noreferrer"));
-$("indicatorsToggle")?.addEventListener("click", () => { const p=$("indicatorQuickPanel"); p.hidden=!p.hidden; $("indicatorsToggle").textContent=p.hidden?"Indicators ▾":"Indicators ▴"; });
-$("drawingToggle")?.addEventListener("click", () => { const p=$("drawingQuickPanel"); p.hidden=!p.hidden; $("drawingToggle").textContent=p.hidden?"Drawing tools ▾":"Drawing tools ▴"; });
-$("crosshairToggle")?.addEventListener("click", () => {
-  if(!chart || !window.LightweightCharts) return;
-  crosshairMagnetMode=!crosshairMagnetMode;
-  const next=crosshairMagnetMode?LightweightCharts.CrosshairMode.Magnet:LightweightCharts.CrosshairMode.Normal;
-  chart.applyOptions({crosshair:{mode:next}});
-  $("crosshairToggle").textContent=crosshairMagnetMode?"Crosshair: magnet":"Crosshair: normal";
-});
-document.querySelectorAll("[data-chart-type]").forEach(button=>button.addEventListener("click",()=>{
-  currentChartStyle=button.dataset.chartType;
-  if(candleSeries) candleSeries.applyOptions({visible:currentChartStyle==="candles"});
-  if(areaSeries) areaSeries.applyOptions({visible:currentChartStyle==="mountain"});
-  document.querySelectorAll("[data-chart-type]").forEach(b=>b.classList.toggle("active",b===button));
-  $("chartStatus").textContent=currentChartStyle==="mountain"
-    ?"Mountain chart · live close-price updates · "+new Date().toLocaleTimeString()
-    :"Candlestick chart · OHLC view · "+new Date().toLocaleTimeString();
-}));
-$("resetChartView")?.addEventListener("click", () => { if(chart) chart.timeScale().fitContent(); });
-document.querySelectorAll("[data-jump]").forEach(button=>button.addEventListener("click",()=>{
-  const target=$(button.dataset.jump);
-  if(target){target.scrollIntoView({behavior:"smooth",block:"start"});target.closest(".panel")?.focus?.();}
-}));
-
-</script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 [hidden] { display: none !important; }
 
@@ -636,6 +578,65 @@ let refreshingSignal = false;
 let orderBlockLines = [];
 
 const $ = id => document.getElementById(id);
+
+/* Dashboard shortcut handlers (run after DOM is ready). */
+/* Compact dashboard shortcuts */
+function syncQuickDemoBalance() {
+  const source = $("predictionBalance");
+  if (source && $("quickDemoBalance")) $("quickDemoBalance").textContent = source.textContent || "$10,000.00";
+}
+const quickBalanceObserver = new MutationObserver(syncQuickDemoBalance);
+if ($("predictionBalance")) quickBalanceObserver.observe($("predictionBalance"), {childList:true,subtree:true,characterData:true});
+$("refreshDemoButton")?.addEventListener("click", async () => {
+  const button=$("refreshDemoButton");
+  button.disabled=true; button.textContent="…";
+  $("quickDemoStatus").textContent="Refreshing simulated balance…";
+  try {
+    await refreshPredictionAccount();
+    await refreshPaperAccount();
+    syncQuickDemoBalance();
+    $("quickDemoStatus").textContent="Demo balance refreshed · no real funds changed";
+  } catch (_) {
+    $("quickDemoStatus").textContent="Could not refresh now. Try again shortly.";
+  } finally { button.disabled=false; button.textContent="↻"; }
+});
+$("depositInfoButton")?.addEventListener("click", () => {
+  alert("Deposits are not enabled in MuB. This is a paper-trading demo; no real funds can be deposited or withdrawn here.");
+});
+$("addMarketButton")?.addEventListener("click", () => {
+  $("marketSelectorPanel").scrollIntoView({behavior:"smooth",block:"start"});
+  $("marketSelectorPanel").style.outline="2px solid var(--blue)";
+  setTimeout(()=>{$("marketSelectorPanel").style.outline="";},1200);
+});
+$("quickDemoTab")?.addEventListener("click", () => $("demoAccountTab").click());
+$("quickRealTab")?.addEventListener("click", () => $("realAccountTab").click());
+$("newsButton")?.addEventListener("click", () => { $("newsPanel").hidden=!$("newsPanel").hidden; });
+$("chartNewsButton")?.addEventListener("click", () => { $("newsPanel").hidden=false; $("newsPanel").scrollIntoView({behavior:"smooth",block:"center"}); });
+$("openNewsSource")?.addEventListener("click", () => window.open("https://www.reuters.com/markets/","_blank","noopener,noreferrer"));
+$("indicatorsToggle")?.addEventListener("click", () => { const p=$("indicatorQuickPanel"); p.hidden=!p.hidden; $("indicatorsToggle").textContent=p.hidden?"Indicators ▾":"Indicators ▴"; });
+$("drawingToggle")?.addEventListener("click", () => { const p=$("drawingQuickPanel"); p.hidden=!p.hidden; $("drawingToggle").textContent=p.hidden?"Drawing tools ▾":"Drawing tools ▴"; });
+$("crosshairToggle")?.addEventListener("click", () => {
+  if(!chart || !window.LightweightCharts) return;
+  crosshairMagnetMode=!crosshairMagnetMode;
+  const next=crosshairMagnetMode?LightweightCharts.CrosshairMode.Magnet:LightweightCharts.CrosshairMode.Normal;
+  chart.applyOptions({crosshair:{mode:next}});
+  $("crosshairToggle").textContent=crosshairMagnetMode?"Crosshair: magnet":"Crosshair: normal";
+});
+document.querySelectorAll("[data-chart-type]").forEach(button=>button.addEventListener("click",()=>{
+  currentChartStyle=button.dataset.chartType;
+  if(candleSeries) candleSeries.applyOptions({visible:currentChartStyle==="candles"});
+  if(areaSeries) areaSeries.applyOptions({visible:currentChartStyle==="mountain"});
+  document.querySelectorAll("[data-chart-type]").forEach(b=>b.classList.toggle("active",b===button));
+  $("chartStatus").textContent=currentChartStyle==="mountain"
+    ?"Mountain chart · live close-price updates · "+new Date().toLocaleTimeString()
+    :"Candlestick chart · OHLC view · "+new Date().toLocaleTimeString();
+}));
+$("resetChartView")?.addEventListener("click", () => { if(chart) chart.timeScale().fitContent(); });
+document.querySelectorAll("[data-jump]").forEach(button=>button.addEventListener("click",()=>{
+  const target=$(button.dataset.jump);
+  if(target){target.scrollIntoView({behavior:"smooth",block:"start"});target.closest(".panel")?.focus?.();}
+}));
+
 
 function clearOrderBlockLines() {
   if (!candleSeries) return;
