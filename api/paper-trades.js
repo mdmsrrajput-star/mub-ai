@@ -1,5 +1,7 @@
 
-const ACCOUNT_KEY = "mub:paper:account:v1";
+const ACCOUNT_KEY = "mub:paper:shared:v1";
+const LEGACY_PREDICTION_KEY = "mub:paper:prediction:v1";
+const LEGACY_SPOT_KEY = "mub:paper:account:v1";
 const STARTING_BALANCE = 10000;
 const FEE_RATE = 0.001; // 0.1% per transaction
 const DAILY_LOSS_LIMIT = STARTING_BALANCE * 0.02;
@@ -12,11 +14,21 @@ local s
 if raw then
   s = cjson.decode(raw)
 else
+  -- One-time migration shares the prediction ledger's balance and preserves
+  -- old prediction history plus spot positions/trades.
+  local predRaw = redis.call("GET", KEYS[2])
+  local spotRaw = redis.call("GET", KEYS[3])
+  local pred = predRaw and cjson.decode(predRaw) or {}
+  local spot = spotRaw and cjson.decode(spotRaw) or {}
+  local predBalance = tonumber(pred.balance) or 10000
+  local spotCash = tonumber(spot.cash) or 10000
+  local sharedCash = predBalance + (spotCash - 10000)
   s = {
-    cash = 10000,
-    realizedPnl = 0,
-    positions = {},
-    trades = {}
+    cash = sharedCash, balance = sharedCash,
+    active = pred.active or {}, history = pred.history or {},
+    realizedPnl = tonumber(spot.realizedPnl) or 0,
+    positions = spot.positions or {},
+    trades = spot.trades or {}
   }
 end
 
@@ -24,6 +36,10 @@ local action = ARGV[1]
 local p = cjson.decode(ARGV[2])
 
 if not s.positions then s.positions = {} end
+if not s.active then s.active = {} end
+if not s.history then s.history = {} end
+if not s.cash then s.cash = tonumber(s.balance) or 10000 end
+if not s.balance then s.balance = tonumber(s.cash) or 10000 end
 if not s.trades then s.trades = {} end
 if not s.realizedPnl then s.realizedPnl = 0 end
 
@@ -179,6 +195,7 @@ while #s.trades > 500 do
   table.remove(s.trades, 1)
 end
 
+s.balance = s.cash
 redis.call("SET", KEYS[1], cjson.encode(s))
 return cjson.encode(s)
 `;
@@ -223,8 +240,10 @@ async function runLedger(action, payload = {}) {
   const result = await redisCommand([
     "EVAL",
     LUA_SCRIPT,
-    "1",
+    "3",
     ACCOUNT_KEY,
+    LEGACY_PREDICTION_KEY,
+    LEGACY_SPOT_KEY,
     action,
     JSON.stringify(payload)
   ]);
