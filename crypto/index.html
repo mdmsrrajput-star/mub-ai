@@ -213,6 +213,15 @@ footer{padding:14px 10px}
  #chart{height:330px}
 }
 
+
+.account-selector-label{font-size:11px;color:var(--muted);align-self:center}
+#accountSelector{min-width:0;flex:1;max-width:100%;padding:9px 30px 9px 10px;border:1px solid var(--border);border-radius:9px;background:#10192b;color:var(--text);font-size:12px}
+.tournament-account-strip{display:flex;align-items:center;gap:9px;padding:10px;background:#171f30;border:1px solid #34435d;border-radius:11px}
+.tournament-coin-logo{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:50%;background:#ffe24d;color:#171717;font-size:21px;font-weight:900;box-shadow:0 0 0 3px rgba(255,226,77,.12)}
+.tournament-quick-coins{margin-left:auto;font-size:17px;font-weight:800;color:#ffe24d;white-space:nowrap}
+#tournamentAutoMode.active{background:#286b5a;border-color:#3a9d83}
+@media(max-width:430px){#accountSelector{font-size:11px;padding:8px 5px;flex:1}.account-selector-label{display:none}.quick-tabs{display:flex;flex-wrap:nowrap}.quick-tabs #newsButton{margin-left:0}}
+
 </style>
 </head>
 <body>
@@ -234,8 +243,12 @@ footer{padding:14px 10px}
     <button type="button" id="addMarketButton" class="add-market-button" aria-label="Add or select market">＋</button>
   </section>
   <div class="quick-tabs controls" role="group" aria-label="Account selection">
-    <button type="button" id="quickDemoTab" class="active">Demo</button>
-    <button type="button" id="quickRealTab">Real · locked</button>
+    <label class="account-selector-label" for="accountSelector">Account</label>
+    <select id="accountSelector" aria-label="Select account">
+      <option value="DEMO">◉ Demo account</option>
+      <option value="REAL">◉ Real account · locked</option>
+      <option value="TOURNAMENT">Ⓣ Tournament account</option>
+    </select>
     <button type="button" id="newsButton">News</button>
   </div>
   <div id="newsPanel" class="panel section" hidden>
@@ -298,6 +311,17 @@ footer{padding:14px 10px}
 
     </div>
     <div class="panel section" id="tournamentPlayPanel" hidden>
+ 
+      <div class="tournament-account-strip">
+        <span class="tournament-coin-logo" aria-label="Tournament coin">T</span>
+        <div><div class="label">TOURNAMENT ACCOUNT</div><div class="note">Free, non-purchasable coins · separate from demo cash</div></div>
+        <div id="tournamentQuickCoins" class="tournament-quick-coins">— T</div>
+      </div>
+      <div class="controls section" role="group" aria-label="Tournament execution mode">
+        <button type="button" id="tournamentManualMode" class="active">MANUAL</button>
+        <button type="button" id="tournamentAutoMode">AUTO SIGNAL ≥70</button>
+      </div>
+      <div class="note" id="tournamentAutoGuidance">Auto Signal checks a fresh MuB signal and submits one tournament prediction only when the score is at least 70/100. It does not guarantee accuracy.</div>
       <div class="controls">
         <button type="button" id="tournamentJoinButton" class="active">JOIN TODAY · FREE</button>
         <button type="button" id="tournamentLogoutButton">LOG OUT</button>
@@ -2047,11 +2071,26 @@ tournamentEl("tournament5mButton").addEventListener("click", () => {
 });
 tournamentEl("tournamentPlayButton").addEventListener("click", async () => {
   const button = tournamentEl("tournamentPlayButton"); button.disabled = true;
-  tournamentEl("tournamentPlayMessage").textContent = "Fetching fresh market price and submitting demo prediction…";
+  tournamentEl("tournamentPlayMessage").textContent = tournamentExecutionMode==="AUTO" ? "Checking fresh signal and confidence score…" : "Fetching fresh market price and submitting tournament prediction…";
   try {
+    let chosenDirection=tournamentDirection;
+    if(tournamentExecutionMode==="AUTO") {
+      const signalTimeframe=tournamentExpirySeconds===300?"5m":"1m";
+      const signalResponse=await fetch("/api/crypto-signal?symbol="+encodeURIComponent(tournamentSymbol)+"&timeframe="+signalTimeframe+"&_="+Date.now(),{cache:"no-store"});
+      if(!signalResponse.ok) throw new Error("Signal unavailable; no tournament trade submitted.");
+      const signalData=await signalResponse.json();
+      const age=Date.now()-Date.parse(signalData.generatedAt);
+      const score=Number(signalData.score);
+      if(!Number.isFinite(age)||age<0||age>90000) throw new Error("Signal is stale; no tournament trade submitted.");
+      if(!Number.isFinite(score)||score<70) throw new Error("Signal score is below 70/100; no tournament trade submitted.");
+      if(signalData.signal==="BUY") chosenDirection="UP";
+      else if(signalData.signal==="SELL") chosenDirection="DOWN";
+      else throw new Error("MuB signal is WAIT; no tournament trade submitted.");
+      tournamentEl("tournamentPlayMessage").textContent="Fresh "+signalData.signal+" signal · score "+score+"/100. Submitting one "+chosenDirection+" tournament prediction…";
+    }
     const data = await tournamentRequest("play", {
       symbol: tournamentSymbol,
-      direction: tournamentDirection,
+      direction: chosenDirection,
       stake: Number(tournamentEl("tournamentStake").value),
       expirySeconds: tournamentExpirySeconds
     });
@@ -2062,6 +2101,54 @@ tournamentEl("tournamentPlayButton").addEventListener("click", async () => {
   finally { button.disabled = false; }
 });
 tournamentEl("tournamentRefreshButton").addEventListener("click", tournamentRefresh);
+
+/* Unified account selector: each account has its own balance and trade controls. */
+let tournamentExecutionMode = "MANUAL";
+function setUnifiedAccount(mode) {
+  const selected = ["DEMO","REAL","TOURNAMENT"].includes(mode) ? mode : "DEMO";
+  $("accountSelector").value = selected;
+  if (selected === "DEMO") {
+    $("tournamentPanel").hidden = true;
+    $("tradeControls").hidden = false;
+    $("predictionTradeHistoryPanel").hidden = false;
+    setAccountMode("DEMO");
+    $("quickDemoStatus").textContent = "Demo account selected · simulated cash only";
+  } else if (selected === "REAL") {
+    $("tournamentPanel").hidden = true;
+    setAccountMode("REAL");
+    $("quickDemoStatus").textContent = "Real account locked · live orders disabled";
+  } else {
+    setAccountMode("DEMO");
+    $("tradeControls").hidden = true;
+    $("predictionTradeHistoryPanel").hidden = true;
+    $("tournamentPanel").hidden = false;
+    $("tournamentPanel").scrollIntoView({behavior:"smooth",block:"start"});
+    $("quickDemoStatus").textContent = "Tournament selected · separate T coins";
+    tournamentRefresh().catch(()=>{});
+  }
+}
+$("accountSelector")?.addEventListener("change",e=>setUnifiedAccount(e.target.value));
+function updateTournamentCoinBadge(user) {
+  const coins=Number(user?.coins);
+  if(Number.isFinite(coins)) {
+    $("tournamentQuickCoins").textContent=coins.toLocaleString()+" T";
+  }
+}
+const originalTournamentShowSignedIn=tournamentShowSignedIn;
+tournamentShowSignedIn=function(user){originalTournamentShowSignedIn(user);updateTournamentCoinBadge(user);};
+$("tournamentManualMode")?.addEventListener("click",()=>{
+  tournamentExecutionMode="MANUAL";
+  $("tournamentManualMode").classList.add("active");
+  $("tournamentAutoMode").classList.remove("active");
+  $("tournamentAutoGuidance").textContent="Manual mode uses your selected tournament asset, direction, expiry and T-coin stake.";
+});
+$("tournamentAutoMode")?.addEventListener("click",()=>{
+  tournamentExecutionMode="AUTO";
+  $("tournamentAutoMode").classList.add("active");
+  $("tournamentManualMode").classList.remove("active");
+  $("tournamentAutoGuidance").textContent="Auto signal is armed for the next button press: MuB checks a fresh signal and requires score ≥70/100. It will not continuously spend tournament coins in the background.";
+});
+
 tournamentUpdateAuthMode("register");
 if (new URLSearchParams(window.location.search).has("tournamentReset")) { tournamentEl("tournamentResetPanel").hidden=false; tournamentEl("tournamentForgotPanel").hidden=true; }
 tournamentRestoreSession().then(()=>tournamentRefresh());
