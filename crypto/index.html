@@ -487,6 +487,19 @@ async function refreshForexSignal() {
   const d = await r.json();
   if (s !== symbol || (paperExecutionMode === "AUTO" ? tf !== selectedAnalysisTimeframe() : tf !== timeframe)) return;
   if (!r.ok || !d.signal) throw new Error(d.error || "Forex signal unavailable");
+  const freshness = analysisFreshness(d, tf);
+  if (!freshness.fresh) {
+    $("signalValue").textContent = "WAIT · STALE DATA";
+    $("signalValue").style.color = "var(--red)";
+    $("signalScore").textContent = freshness.reason + " · No automatic prediction allowed.";
+    $("signalUpdated").textContent = "Fresh candles required before any entry.";
+    $("signalReasons").textContent = "Signal suppressed because the latest market candle is not fresh.";
+    clearOrderBlockLines();
+    $("orderBlockValue").textContent = "STALE DATA · NO ENTRY";
+    $("orderBlockDetails").textContent = freshness.reason + ". Previous zones are not valid entry triggers.";
+    setStatus("signalConnection", "STALE DATA", false);
+    return;
+  }
   $("signalValue").textContent = d.signal;
   $("signalValue").style.color = d.signal === "BUY" ? "var(--green)" : d.signal === "SELL" ? "var(--red)" : "var(--blue)";
   $("signalScore").textContent = "Score: " + d.score + " · " + d.candlesUsed + " candles";
@@ -619,6 +632,28 @@ function intervalMs(tf) {
   if(!m) throw new Error("Unsupported timeframe");
   return Number(m[1]) *
     ({m:60000,h:3600000,d:86400000,w:604800000})[m[2]];
+}
+
+function analysisFreshness(data, tf) {
+  // Signal timestamps are based on candle open times (Unix seconds).
+  // Fail closed if the newest candle is missing or too old for its timeframe.
+  const candles = Array.isArray(data && data.candles) ? data.candles : [];
+  const candle = data && data.candle ? data.candle : candles[candles.length - 1];
+  const stamp = Number(candle && candle.time);
+  if (!Number.isFinite(stamp) || stamp <= 0) {
+    return { fresh: false, ageSeconds: null, reason: "Newest candle timestamp missing" };
+  }
+  const duration = intervalMs(tf);
+  const candleCloseMs = stamp * 1000 + duration;
+  const ageSeconds = Math.max(0, Math.floor((Date.now() - candleCloseMs) / 1000));
+  const maxAgeSeconds = Math.max(120, Math.ceil(duration * 2.5 / 1000));
+  return {
+    fresh: ageSeconds <= maxAgeSeconds,
+    ageSeconds,
+    reason: ageSeconds <= maxAgeSeconds
+      ? "Newest completed candle is fresh"
+      : "Newest candle is stale (" + ageSeconds + "s old)"
+  };
 }
 
 async function getJSON(url) {
@@ -993,6 +1028,19 @@ async function refreshSignal() {
 
     const calculatedAt = Date.parse(data.generatedAt);
     if(!Number.isFinite(calculatedAt)) throw new Error("Signal response has no valid calculation timestamp");
+    const freshness = analysisFreshness(data, requestedSignalTimeframe);
+    if (!freshness.fresh) {
+      $("signalValue").textContent = "WAIT · STALE DATA";
+      $("signalValue").style.color = "var(--red)";
+      $("signalScore").textContent = freshness.reason + " · Automatic paper entry blocked.";
+      $("signalUpdated").textContent = "Fresh completed candles required.";
+      $("signalReasons").textContent = "Signal suppressed because the newest candle is stale.";
+      clearOrderBlockLines();
+      $("orderBlockValue").textContent = "STALE DATA · NO ENTRY";
+      $("orderBlockDetails").textContent = freshness.reason + ". Existing zones are not valid entry triggers.";
+      setStatus("signalConnection", "STALE DATA", false);
+      return;
+    }
     lastSuccessfulSignalAt = calculatedAt;
     const ageSeconds = Math.max(0, Math.floor((Date.now()-calculatedAt)/1000));
     const ageLabel = ageSeconds < 60 ? ageSeconds + "s ago" : Math.floor(ageSeconds/60) + "m ago";
