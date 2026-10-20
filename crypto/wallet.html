@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<title>MuB Wallet · Personal</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#141c30;--border:#28334b;--text:#edf2ff;--muted:#9aa8c3;--green:#30d6a0;--blue:#85aaff;--red:#ff687d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,Arial,sans-serif}header{padding:18px 15px;border-bottom:1px solid var(--border)}main{max-width:760px;margin:auto;padding:14px}.brand{font-size:22px;font-weight:800}.muted,.note{color:var(--muted);font-size:13px;line-height:1.6}.banner{background:#102c2a;border:1px solid #236d5a;color:#70efc4;padding:11px;border-radius:10px;font-size:12px;font-weight:800;margin-bottom:12px}.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:15px;margin-top:12px}.row{display:flex;align-items:center;gap:12px}.row>div:last-child{flex:1}.coin{width:44px;height:44px;display:grid;place-items:center;border-radius:50%;font-weight:900;background:#29344c}.value{font-size:19px;font-weight:800;overflow-wrap:anywhere}button,a.button{display:inline-block;border:1px solid var(--border);border-radius:9px;padding:11px 14px;background:#1b2740;color:var(--text);font-size:13px;font-weight:750;text-decoration:none;cursor:pointer}button.primary{background:#304c80;border-color:var(--blue)}button:disabled{opacity:.5}.status{margin-top:10px;font-size:13px;overflow-wrap:anywhere}.good{color:var(--green)}.warn{color:#ffd28a}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.small{font-size:12px;color:var(--muted)}footer{text-align:center;padding:24px 12px}@media(max-width:480px){main{padding:10px}.panel{padding:12px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div class="brand">MuB Wallet</div><div class="muted">Personal wallet connection · Self-custody · Android-first</div></header>
+<main>
+<div class="banner">PAPER TRADING ONLY · LIVE TRADING DISABLED · DEMO PROFITS ARE NOT WITHDRAWABLE</div>
+<section class="panel">
+<h2 style="margin:0 0 8px">Connect your existing wallet</h2>
+<p class="note">This first version is a connection-only preview. It does not create wallets, request recovery phrases, sign transactions, send funds, or connect to the MuB paper-trading balance.</p>
+<button id="connectTron" class="primary">Connect TronLink</button>
+<button id="disconnect" disabled>Disconnect</button>
+<div id="connectionStatus" class="status warn">Not connected. Open this page inside the TronLink app's dApp browser to test a TRON connection.</div>
+<div id="addressWrap" hidden style="margin-top:12px"><div class="small">Connected TRON address</div><div id="address" class="value"></div><button id="copyAddress" style="margin-top:9px">Copy address</button></div>
+</section>
+<section class="panel">
+<h2 style="margin:0 0 12px">Assets planned</h2>
+<div class="grid">
+<div class="row"><div class="coin">₿</div><div><strong>Bitcoin (BTC)</strong><div class="small">Connection and balance support not enabled yet</div></div></div>
+<div class="row"><div class="coin" style="color:#30d6a0">₮</div><div><strong>USDT · TRC20</strong><div class="small">TRON wallet connection only; token balance not enabled yet</div></div></div>
+</div>
+<p class="note">A connected address is not proof of ownership of funds and does not mean MuB can move them. This page intentionally has no send, receive, deposit, withdrawal, or trading actions.</p>
+</section>
+<section class="panel">
+<h2 style="margin:0 0 8px">Security rules</h2>
+<ul class="note" style="padding-left:20px;margin-bottom:0">
+<li>Never enter or paste a seed phrase or private key into MuB.</li>
+<li>Review every wallet permission request inside your wallet app.</li>
+<li>TRC20 USDT needs a compatible TRON address; network mistakes can cause permanent loss.</li>
+<li>BTC support will require a separate Bitcoin-compatible wallet connection.</li>
+<li>Demo balances and simulated profits remain separate and non-withdrawable.</li>
+</ul>
+</section>
+<p class="note" style="text-align:center">Connection-only prototype · No transactions are submitted or signed.</p>
+</main>
+<footer><a class="button" href="./">← Back to MuB Market Intelligence</a></footer>
+<script>
+const statusEl=document.getElementById("connectionStatus");
+const connectButton=document.getElementById("connectTron");
+const disconnectButton=document.getElementById("disconnect");
+const addressWrap=document.getElementById("addressWrap");
+const addressEl=document.getElementById("address");
+let connectedAddress="";
+function showAddress(address){
+ connectedAddress=address||"";
+ addressEl.textContent=connectedAddress;
+ addressWrap.hidden=!connectedAddress;
+ disconnectButton.disabled=!connectedAddress;
+ connectButton.disabled=!!connectedAddress;
+ statusEl.textContent=connectedAddress?"Connected to TronLink. No transaction permissions requested.":"Not connected.";
+ statusEl.className="status "+(connectedAddress?"good":"warn");
+}
+connectButton.addEventListener("click",async()=>{
+ try{
+  if(!window.tronLink && !window.tronWeb){
+   statusEl.textContent="TronLink provider not found. Open this page in the TronLink app's dApp browser; connection is not simulated.";
+   statusEl.className="status warn";
+   return;
+  }
+  if(window.tronLink && typeof window.tronLink.request==="function"){
+   const result=await window.tronLink.request({method:"tron_requestAccounts"});
+   if(result && result.code && result.code!==200){throw new Error(result.message||"Wallet connection was not approved.");}
+  }
+  const address=window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58;
+  if(!address) throw new Error("No approved TRON address was exposed. Approve connection in TronLink and try again.");
+  showAddress(address);
+ }catch(error){
+  statusEl.textContent="Connection failed: "+(error&&error.message?error.message:"request rejected");
+  statusEl.className="status warn";
+ }
+});
+disconnectButton.addEventListener("click",()=>showAddress(""));
+document.getElementById("copyAddress").addEventListener("click",async()=>{
+ try{
+  await navigator.clipboard.writeText(connectedAddress);
+  document.getElementById("copyAddress").textContent="Copied";
+ }catch{
+  statusEl.textContent="Copy was blocked by the browser. Select and copy the address manually.";
+  statusEl.className="status warn";
+ }
+});
+if(window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58){
+ showAddress(window.tronWeb.defaultAddress.base58);
+}
+</script>
+</body>
+</html>
