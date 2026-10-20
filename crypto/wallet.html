@@ -34,6 +34,19 @@
 <div id="checkedAt" class="small" style="margin-top:6px"></div>
 </section>
 <section class="panel">
+<h2 style="margin:0 0 8px">Bitcoin (BTC) read-only balance</h2>
+<p class="note">Enter a public Bitcoin mainnet address from your Bitcoin wallet. MuB checks the public address only; this does not connect your wallet or enable transfers. Never enter a seed phrase or private key.</p>
+<label for="btcAddress" class="small">Bitcoin address</label>
+<input id="btcAddress" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste public BTC address" style="display:block;width:100%;margin-top:6px;padding:12px;border-radius:9px;border:1px solid var(--border);background:#0e1628;color:var(--text)">
+<div class="grid" style="margin-top:10px">
+<div class="asset"><div class="small">Total balance</div><div id="btcBalance" class="balance">—</div><div class="unit">BTC</div></div>
+<div class="asset"><div class="small">Confirmed</div><div id="btcConfirmed" class="balance">—</div><div class="unit">BTC</div></div>
+</div>
+<div class="actions"><button id="checkBtc" class="primary">Check BTC balance</button><button id="clearBtc">Clear</button></div>
+<div id="btcStatus" class="status warn">No Bitcoin address checked. Read-only lookup only.</div>
+<div id="btcCheckedAt" class="small" style="margin-top:6px"></div>
+</section>
+<section class="panel">
 <h2 style="margin:0 0 8px">Real USDT reserve dashboard</h2>
 <div class="row"><div class="coin" style="color:#30d6a0">₮</div><div><strong id="reserveHeadline">Checking reserve configuration…</strong><div id="reserveSub" class="small">Read-only TRON Mainnet verification</div></div></div>
 <div class="grid" style="margin-top:12px">
@@ -195,6 +208,35 @@ async function loadReserve(){
  }
 }
 refreshReserveButton.addEventListener("click",loadReserve);
+const btcAddressInput=document.getElementById("btcAddress");
+const btcBalanceEl=document.getElementById("btcBalance");
+const btcConfirmedEl=document.getElementById("btcConfirmed");
+const btcStatusEl=document.getElementById("btcStatus");
+const btcCheckedAtEl=document.getElementById("btcCheckedAt");
+document.getElementById("checkBtc").addEventListener("click",async()=>{
+ const address=btcAddressInput.value.trim();
+ if(!address){btcStatusEl.textContent="Paste a public Bitcoin address first.";btcStatusEl.className="status warn";return;}
+ const button=document.getElementById("checkBtc");
+ button.disabled=true;btcStatusEl.textContent="Checking public Bitcoin Mainnet data…";btcStatusEl.className="status";
+ try{
+  const response=await fetch("/api/bitcoin-balance?address="+encodeURIComponent(address),{cache:"no-store",headers:{Accept:"application/json"}});
+  const data=await response.json();
+  if(!response.ok||!data.ok)throw new Error(data.error||"Balance lookup failed.");
+  if(data.address!==address)throw new Error("Address mismatch in response.");
+  btcBalanceEl.textContent=Number(data.balanceBtc).toLocaleString(undefined,{maximumFractionDigits:8});
+  btcConfirmedEl.textContent=Number(data.confirmedBtc).toLocaleString(undefined,{maximumFractionDigits:8});
+  btcCheckedAtEl.textContent="Checked: "+new Date(data.checkedAt||Date.now()).toLocaleString()+" · "+data.network;
+  btcStatusEl.textContent=data.note||"Public balance lookup complete. No transactions were sent.";
+  btcStatusEl.className="status good";
+ }catch(error){
+  btcStatusEl.textContent="Could not check BTC balance: "+(error&&error.message?error.message:"unknown error");
+  btcStatusEl.className="status warn";
+ }finally{button.disabled=false;}
+});
+document.getElementById("clearBtc").addEventListener("click",()=>{
+ btcAddressInput.value="";btcBalanceEl.textContent="—";btcConfirmedEl.textContent="—";btcCheckedAtEl.textContent="";
+ btcStatusEl.textContent="No Bitcoin address checked. Read-only lookup only.";btcStatusEl.className="status warn";
+});
 loadReserve();
 document.getElementById("copyAddress").addEventListener("click",async()=>{
  try{
