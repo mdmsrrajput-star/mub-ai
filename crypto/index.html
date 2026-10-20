@@ -44,11 +44,20 @@ $("indicatorsToggle")?.addEventListener("click", () => { const p=$("indicatorQui
 $("drawingToggle")?.addEventListener("click", () => { const p=$("drawingQuickPanel"); p.hidden=!p.hidden; $("drawingToggle").textContent=p.hidden?"Drawing tools ▾":"Drawing tools ▴"; });
 $("crosshairToggle")?.addEventListener("click", () => {
   if(!chart || !window.LightweightCharts) return;
-  const current=chart.options().crosshair?.mode;
-  const next=current===LightweightCharts.CrosshairMode.Normal?LightweightCharts.CrosshairMode.Magnet:LightweightCharts.CrosshairMode.Normal;
+  crosshairMagnetMode=!crosshairMagnetMode;
+  const next=crosshairMagnetMode?LightweightCharts.CrosshairMode.Magnet:LightweightCharts.CrosshairMode.Normal;
   chart.applyOptions({crosshair:{mode:next}});
-  $("crosshairToggle").textContent=next===LightweightCharts.CrosshairMode.Magnet?"Crosshair: magnet":"Crosshair: normal";
+  $("crosshairToggle").textContent=crosshairMagnetMode?"Crosshair: magnet":"Crosshair: normal";
 });
+document.querySelectorAll("[data-chart-type]").forEach(button=>button.addEventListener("click",()=>{
+  currentChartStyle=button.dataset.chartType;
+  if(candleSeries) candleSeries.applyOptions({visible:currentChartStyle==="candles"});
+  if(areaSeries) areaSeries.applyOptions({visible:currentChartStyle==="mountain"});
+  document.querySelectorAll("[data-chart-type]").forEach(b=>b.classList.toggle("active",b===button));
+  $("chartStatus").textContent=currentChartStyle==="mountain"
+    ?"Mountain chart · live close-price updates · "+new Date().toLocaleTimeString()
+    :"Candlestick chart · OHLC view · "+new Date().toLocaleTimeString();
+}));
 $("resetChartView")?.addEventListener("click", () => { if(chart) chart.timeScale().fitContent(); });
 document.querySelectorAll("[data-jump]").forEach(button=>button.addEventListener("click",()=>{
   const target=$(button.dataset.jump);
@@ -563,7 +572,9 @@ const CRYPTO_SYMBOLS = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUS
 const FOREX_SYMBOLS = ["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY"];
 const METAL_SYMBOLS = ["XAGUSD"];
 let timeframe = "5m";
-let chart, candleSeries, volumeSeries;
+let chart, candleSeries, volumeSeries, areaSeries = null;
+let currentChartStyle = "candles";
+let crosshairMagnetMode = false;
 let marketSocket = null;
 let priceSocket = null;
 let marketGeneration = 0;
@@ -890,6 +901,15 @@ function createChart() {
     wickDownColor:"#ff687d"
   });
 
+
+  areaSeries = chart.addAreaSeries({
+    lineColor:"#64a8ff",
+    topColor:"rgba(100,168,255,0.28)",
+    bottomColor:"rgba(100,168,255,0.02)",
+    lineWidth:2,
+    visible:false
+  });
+
   volumeSeries = chart.addHistogramSeries({
     priceFormat:{type:"volume"},
     priceScaleId:"volume"
@@ -947,7 +967,7 @@ async function loadHistory() {
     if (!r.ok || !Array.isArray(d.candles)) throw new Error(d.error || "Forex candles unavailable");
     const candles = d.candles.map(c => ({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close}));
     const volumes = candles.map(c => volumeBar(c.time, 0, c.close >= c.open));
-    candleSeries.setData(candles); volumeSeries.setData(volumes); chart.timeScale().fitContent();
+    candleSeries.setData(candles); if(areaSeries) areaSeries.setData(candles.map(x=>({time:x.time,value:x.close}))); volumeSeries.setData(volumes); chart.timeScale().fitContent();
     lastVolumeTime = volumes.length ? volumes[volumes.length-1].time : 0;
     $("livePrice").textContent = Number(candles[candles.length-1].close).toFixed(5);
     $("chartTitle").textContent = symbolLabel(symbol) + " · " + timeframe;
@@ -1009,6 +1029,7 @@ async function loadHistory() {
 
   if(!candles.length) throw new Error("No candles returned");
   candleSeries.setData(candles);
+  if(areaSeries) areaSeries.setData(candles.map(x=>({time:x.time,value:x.close})));
   volumeSeries.setData(volumes);
   renderCandleAnalytics(candles, symbol);
   chart.timeScale().fitContent();
@@ -1045,6 +1066,7 @@ function handleTrade(msg) {
   candleSeries.update({
     time:c.time,open:c.open,high:c.high,low:c.low,close:c.close
   });
+  if(areaSeries) areaSeries.update({time:c.time,value:c.close});
   updateVolume(c.time,c.volume,c.close>=c.open);
   const base=lastCandlesForAnalytics.filter(x=>x.time!==c.time);
   renderCandleAnalytics(base.concat([{time:c.time,open:c.open,high:c.high,low:c.low,close:c.close}]).slice(-200),symbol);
@@ -1061,6 +1083,7 @@ function handleKline(msg) {
     low:Number(k.l),close:Number(k.c)
   };
   candleSeries.update(c);
+  if(areaSeries) areaSeries.update({time:c.time,value:c.close});
   updateVolume(c.time,Number(k.v),c.close>=c.open);
   const base=lastCandlesForAnalytics.filter(x=>x.time!==c.time);
   renderCandleAnalytics(base.concat([c]).slice(-200),symbol);
