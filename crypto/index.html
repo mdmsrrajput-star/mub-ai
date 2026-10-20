@@ -217,10 +217,11 @@ footer{text-align:center;padding:20px 12px}
     </div>
     <button type="button" id="startPredictionButton" class="section" style="width:100%;padding:13px;background:#245e4d;color:#ffffff;font-weight:700;border:1px solid #398c70;border-radius:9px">START PAPER PREDICTION</button>
     <div class="panel section" id="predictionAccountPanel">
-      <div class="label">Paper prediction account</div>
+      <div class="label">UP/DOWN prediction balance · separate ledger</div>
       <div class="price" id="predictionBalance">$10,000.00</div>
       <div class="note" id="predictionStatus" aria-live="polite">Checking paper prediction ledger…</div>
       <div class="note" id="predictionHistory"></div>
+      <div class="note">This balance tracks timed UP/DOWN predictions only; it is separate from spot paper-trading equity below.</div>
     </div>
   </div>
 
@@ -306,10 +307,11 @@ footer{text-align:center;padding:20px 12px}
     Recent seconds history is limited by the exchange trade-history endpoint.</div>
   </div>  
 <div class="panel">
-  <div class="label">Paper account equity</div>
+  <div class="label">Spot paper-trading equity · separate ledger</div>
   <div class="value" id="paperEquity">Loading...</div>
-  <div class="note" id="paperCash">Connecting to paper account...</div>
+  <div class="note" id="paperCash">Connecting to spot paper account...</div>
   <div class="note" id="paperPositions">Open positions: —</div>
+  <div class="note">This account tracks simulated spot positions and is not combined with the UP/DOWN prediction balance.</div>
 </div>
     <div class="panel">
       <div class="label" id="signalEngineLabel">Signal engine · follows chart timeframe</div>
