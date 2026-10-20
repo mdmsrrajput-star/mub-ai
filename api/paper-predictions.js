@@ -74,6 +74,17 @@ if action == "status" then return cjson.encode(s) end
 if action == "start" then
  local amount = tonumber(p.amount)
  if not amount or amount < 1 or amount > 1000 then return redis.error_reply("Stake must be between $1 and $1,000") end
+ -- Idempotency is enforced inside Redis/Lua so simultaneous requests and page
+ -- reloads cannot bypass the duplicate check for the same auto-zone signal.
+ local requestKey = p.idempotencyKey
+ if requestKey and requestKey ~= "" then
+  for _, a in ipairs(s.active) do
+   if a and a.idempotencyKey == requestKey then return redis.error_reply("Duplicate paper prediction request") end
+  end
+  for _, h in ipairs(s.history) do
+   if h and h.idempotencyKey == requestKey then return redis.error_reply("Duplicate paper prediction request") end
+  end
+ end
  local committed = 0
  for _, a in ipairs(s.active) do
   if a and a.status == "PENDING" then committed = committed + (tonumber(a.stake) or 0) end
@@ -82,7 +93,7 @@ if action == "start" then
  -- Deduct the stake immediately when the paper order is accepted.
  s.balance = tonumber(s.balance or 10000) - amount
  table.insert(s.active, {
-  id = p.id, symbol = p.symbol, direction = p.direction, stake = amount,
+  id = p.id, idempotencyKey = p.idempotencyKey, symbol = p.symbol, direction = p.direction, stake = amount,
   expiry = p.expiry, entryPrice = tonumber(p.price), startedAt = tonumber(p.now),
   expiresAt = tonumber(p.now) + tonumber(p.duration), status = "PENDING",
   payoutRate = 1.0, stakeDeducted = true
@@ -183,12 +194,14 @@ export default async function handler(req, res) {
     const price = await getPrice(symbol);
     const account = await ledger("start", {
       id: `paper-${now}-${Math.random().toString(36).slice(2, 9)}`,
-      symbol, direction, expiry, amount, price, now, duration: EXPIRIES[expiry]
+      symbol, direction, expiry, amount, price, now, duration: EXPIRIES[expiry],
+      idempotencyKey: typeof body.idempotencyKey === "string" && /^[A-Za-z0-9:_|.-]{8,180}$/.test(body.idempotencyKey)
+        ? body.idempotencyKey : null
     });
     return send(res, 201, { ok: true, account, payoutRate: PAYOUT_RATE, message: "Paper prediction started; no real-money order was placed." });
   } catch (error) {
     const message = error.message || "Paper prediction could not be started";
-    const conflict = /already active/i.test(message);
+    const conflict = /already active|Duplicate paper prediction request/i.test(message);
     const client = /Stake must|Insufficient paper balance|Only BTC|Direction must|Unsupported expiry|Unsupported action/i.test(message);
     return send(res, conflict ? 409 : client ? 400 : 503, { ok: false, error: message });
   }
