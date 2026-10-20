@@ -580,6 +580,22 @@ function money(n) {
 }
 
 function setStatus(id,text,good) {
+  // Both Binance sockets share one status label. Derive the displayed state
+  // from both sockets so the price socket cannot overwrite a healthy chart feed.
+  if (id === "connection" && !isForex && symbol !== "XAUUSD" && typeof WebSocket !== "undefined") {
+    const chartLive = !!marketSocket && marketSocket.readyState === WebSocket.OPEN;
+    const priceLive = !!priceSocket && priceSocket.readyState === WebSocket.OPEN;
+    if (chartLive && priceLive) {
+      text = "LIVE · CHART + PRICE";
+      good = true;
+    } else if (chartLive) {
+      text = "PARTIAL · CHART LIVE";
+      good = false;
+    } else if (priceLive) {
+      text = "PARTIAL · PRICE LIVE";
+      good = false;
+    }
+  }
   $(id).textContent = text;
   $(id).style.color = good ? "var(--green)" : "var(--red)";
 }
