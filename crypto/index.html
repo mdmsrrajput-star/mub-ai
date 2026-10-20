@@ -6,7 +6,56 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b1020">
 <title>MuB Crypto Intelligence</title>
-<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js">
+/* Compact dashboard shortcuts */
+function syncQuickDemoBalance() {
+  const source = $("predictionBalance");
+  if (source && $("quickDemoBalance")) $("quickDemoBalance").textContent = source.textContent || "$10,000.00";
+}
+const quickBalanceObserver = new MutationObserver(syncQuickDemoBalance);
+if ($("predictionBalance")) quickBalanceObserver.observe($("predictionBalance"), {childList:true,subtree:true,characterData:true});
+$("refreshDemoButton")?.addEventListener("click", async () => {
+  const button=$("refreshDemoButton");
+  button.disabled=true; button.textContent="…";
+  $("quickDemoStatus").textContent="Refreshing simulated balance…";
+  try {
+    await refreshPredictionAccount();
+    await refreshPaperAccount();
+    syncQuickDemoBalance();
+    $("quickDemoStatus").textContent="Demo balance refreshed · no real funds changed";
+  } catch (_) {
+    $("quickDemoStatus").textContent="Could not refresh now. Try again shortly.";
+  } finally { button.disabled=false; button.textContent="↻"; }
+});
+$("depositInfoButton")?.addEventListener("click", () => {
+  alert("Deposits are not enabled in MuB. This is a paper-trading demo; no real funds can be deposited or withdrawn here.");
+});
+$("addMarketButton")?.addEventListener("click", () => {
+  $("marketSelectorPanel").scrollIntoView({behavior:"smooth",block:"start"});
+  $("marketSelectorPanel").style.outline="2px solid var(--blue)";
+  setTimeout(()=>{$("marketSelectorPanel").style.outline="";},1200);
+});
+$("quickDemoTab")?.addEventListener("click", () => $("demoAccountTab").click());
+$("quickRealTab")?.addEventListener("click", () => $("realAccountTab").click());
+$("newsButton")?.addEventListener("click", () => { $("newsPanel").hidden=!$("newsPanel").hidden; });
+$("chartNewsButton")?.addEventListener("click", () => { $("newsPanel").hidden=false; $("newsPanel").scrollIntoView({behavior:"smooth",block:"center"}); });
+$("openNewsSource")?.addEventListener("click", () => window.open("https://www.reuters.com/markets/","_blank","noopener,noreferrer"));
+$("indicatorsToggle")?.addEventListener("click", () => { const p=$("indicatorQuickPanel"); p.hidden=!p.hidden; $("indicatorsToggle").textContent=p.hidden?"Indicators ▾":"Indicators ▴"; });
+$("drawingToggle")?.addEventListener("click", () => { const p=$("drawingQuickPanel"); p.hidden=!p.hidden; $("drawingToggle").textContent=p.hidden?"Drawing tools ▾":"Drawing tools ▴"; });
+$("crosshairToggle")?.addEventListener("click", () => {
+  if(!chart || !window.LightweightCharts) return;
+  const current=chart.options().crosshair?.mode;
+  const next=current===LightweightCharts.CrosshairMode.Normal?LightweightCharts.CrosshairMode.Magnet:LightweightCharts.CrosshairMode.Normal;
+  chart.applyOptions({crosshair:{mode:next}});
+  $("crosshairToggle").textContent=next===LightweightCharts.CrosshairMode.Magnet?"Crosshair: magnet":"Crosshair: normal";
+});
+$("resetChartView")?.addEventListener("click", () => { if(chart) chart.timeScale().fitContent(); });
+document.querySelectorAll("[data-jump]").forEach(button=>button.addEventListener("click",()=>{
+  const target=$(button.dataset.jump);
+  if(target){target.scrollIntoView({behavior:"smooth",block:"start"});target.closest(".panel")?.focus?.();}
+}));
+
+</script>
 <style>
 [hidden] { display: none !important; }
 
@@ -118,6 +167,43 @@ footer{padding:14px 10px}
   button{padding:7px;font-size:10px}
 }
 
+
+/* Trading-terminal layout inspired by the supplied reference */
+.quickbar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:stretch}
+.quick-account{min-width:0;padding:11px 12px;background:#171f30;border:1px solid #2b3549;border-radius:13px}
+.quick-account-label{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.paper-pill{font-size:9px;font-weight:800;color:#6ee7b7;background:#12382f;padding:3px 6px;border-radius:99px}
+.quick-account-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
+.quick-account-row strong{font-size:clamp(18px,4vw,25px);font-variant-numeric:tabular-nums}
+.quick-account .note{margin-top:2px;font-size:10px}
+.icon-button{font-size:20px;padding:4px 10px;border-radius:50%;min-width:38px}
+.deposit-button{background:#ffe24d;color:#171717;border-color:#ffe24d;font-size:13px;padding:10px 13px;min-width:85px}
+.add-market-button{font-size:22px;padding:8px 14px;border-radius:12px}
+.quick-tabs{align-items:center;margin-top:7px}
+.quick-tabs button{border-radius:99px}
+.quick-tabs #newsButton{margin-left:auto}
+.quick-panel-heading{font-weight:800;margin-bottom:5px}
+.chart-toolbar{display:flex;justify-content:space-between;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px}
+.chart-tool-group{display:flex;gap:5px;flex-wrap:wrap}
+.chart-tool-group button{padding:7px 9px;font-size:10px}
+.tool-panel{margin-top:7px;padding:10px;border:1px solid var(--border);background:#0f1728;border-radius:10px}
+.tool-panel strong{font-size:12px}
+.bottom-nav{position:sticky;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;margin:14px -7px 0;padding:8px 5px calc(8px + env(safe-area-inset-bottom));background:rgba(9,15,28,.96);border-top:1px solid var(--border);backdrop-filter:blur(12px)}
+.bottom-nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:6px 2px;background:transparent;border:0;color:var(--muted);font-size:9px}
+.bottom-nav button span{font-size:19px;line-height:1.1;color:var(--text)}
+.bottom-nav button:active,.bottom-nav button:focus-visible{color:var(--green)}
+#chart{height:clamp(260px,55vh,480px)}
+@media(max-width:430px){
+ .quickbar{grid-template-columns:minmax(0,1fr) auto}
+ .quick-account{grid-column:1}
+ .deposit-button{grid-column:2;grid-row:1}
+ .add-market-button{grid-column:2;grid-row:2;padding:5px 12px}
+ .quick-account{grid-row:1 / span 2;display:flex;flex-direction:column;justify-content:center}
+ .chart-toolbar{align-items:flex-start}
+ .chart-tool-group button{padding:7px 8px}
+ #chart{height:330px}
+}
+
 </style>
 </head>
 <body>
@@ -128,6 +214,27 @@ footer{padding:14px 10px}
 
 <main>
   <div class="banner">PAPER MODE ACTIVE · REAL ORDER EXECUTION DISABLED</div>
+
+  <section class="quickbar section" aria-label="Account shortcuts">
+    <div class="quick-account">
+      <div class="quick-account-label">Demo account <span class="paper-pill">PAPER ONLY</span></div>
+      <div class="quick-account-row"><strong id="quickDemoBalance">$10,000.00</strong><button type="button" id="refreshDemoButton" class="icon-button" aria-label="Refresh demo balance" title="Refresh demo balance">↻</button></div>
+      <div class="note" id="quickDemoStatus">Simulated balance · no real funds</div>
+    </div>
+    <button type="button" id="depositInfoButton" class="deposit-button">Deposit <span>↗</span></button>
+    <button type="button" id="addMarketButton" class="add-market-button" aria-label="Add or select market">＋</button>
+  </section>
+  <div class="quick-tabs controls" role="group" aria-label="Account selection">
+    <button type="button" id="quickDemoTab" class="active">Demo</button>
+    <button type="button" id="quickRealTab">Real · locked</button>
+    <button type="button" id="newsButton">News</button>
+  </div>
+  <div id="newsPanel" class="panel section" hidden>
+    <div class="quick-panel-heading">Market news</div>
+    <div class="note">A verified news feed is not connected yet. This panel will not invent headlines. Use a trusted news source for current events.</div>
+    <div class="controls section"><button type="button" id="openNewsSource">Open financial news ↗</button></div>
+  </div>
+
 
   <div class="section" id="tournamentMenuWrap" hidden>
     <button type="button" id="tournamentMenuToggle" aria-expanded="false">🏆 DAILY TOURNAMENT ▾</button>
@@ -340,6 +447,29 @@ footer{padding:14px 10px}
 
   <div class="panel section">
     <h2 id="chartTitle">BTC / USDT · 5m</h2>
+
+    <div class="chart-toolbar" aria-label="Chart tools">
+      <div class="chart-tool-group" role="group" aria-label="Chart type">
+        <button type="button" class="chart-type-button active" data-chart-type="candles">Candles</button>
+        <button type="button" class="chart-type-button" data-chart-type="mountain">Mountain</button>
+      </div>
+      <div class="chart-tool-group">
+        <button type="button" id="indicatorsToggle">Indicators ▾</button>
+        <button type="button" id="drawingToggle">Drawing tools ▾</button>
+        <button type="button" id="chartNewsButton">News</button>
+      </div>
+    </div>
+    <div id="indicatorQuickPanel" class="tool-panel" hidden>
+      <strong>Strategy & indicators</strong>
+      <div class="note">Live signal, RSI/MACD readings, market structure and order-block analysis are shown in the analysis section below.</div>
+      <div class="controls section"><button type="button" data-jump="advancedTerminal">Market structure</button><button type="button" data-jump="signalValue">Signal</button><button type="button" data-jump="indicators">Indicator readings</button><button type="button" data-jump="orderBlockValue">Order blocks</button></div>
+    </div>
+    <div id="drawingQuickPanel" class="tool-panel" hidden>
+      <strong>Chart drawing</strong>
+      <div class="note">Use the chart crosshair to inspect candle values. Drawing overlays are not enabled in this build yet.</div>
+      <div class="controls section"><button type="button" id="crosshairToggle">Toggle crosshair</button><button type="button" id="resetChartView">Reset chart view</button></div>
+    </div>
+
     <div class="controls" id="timeframes">
       <button data-tf="5s">5s</button>
       <button data-tf="15s">15s</button>
@@ -407,6 +537,15 @@ footer{padding:14px 10px}
     </div>
   </div>
 </main>
+
+
+<nav class="bottom-nav" aria-label="Dashboard navigation">
+  <button type="button" data-jump="tradeControls"><span>⇧</span>Trade</button>
+  <button type="button" data-jump="chartTitle"><span>▥</span>Chart</button>
+  <button type="button" data-jump="predictionTradeHistoryPanel"><span>◷</span>Queue / history</button>
+  <button type="button" data-jump="advancedTerminal"><span>⌁</span>Analysis</button>
+  <button type="button" data-jump="systemMessage"><span>☰</span>More</button>
+</nav>
 
 <footer class="note">MuB Crypto Intelligence · Paper mode · No real orders</footer>
 
