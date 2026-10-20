@@ -235,7 +235,7 @@ footer{padding:14px 10px}
 
   <section class="quickbar section" aria-label="Account shortcuts">
     <div class="quick-account">
-      <div class="quick-account-label">Demo account <span class="paper-pill">PAPER ONLY</span></div>
+      <div class="quick-account-label" id="quickAccountLabel">Demo account <span class="paper-pill">PAPER ONLY</span></div>
       <div class="quick-account-row"><strong id="quickDemoBalance">$10,000.00</strong><button type="button" id="refreshDemoButton" class="icon-button" aria-label="Refresh demo balance" title="Refresh demo balance">↻</button></div>
       <div class="note" id="quickDemoStatus">Simulated balance · no real funds</div>
     </div>
@@ -2112,10 +2112,14 @@ function setUnifiedAccount(mode) {
     $("tradeControls").hidden = false;
     $("predictionTradeHistoryPanel").hidden = false;
     setAccountMode("DEMO");
+    $("quickAccountLabel").innerHTML = 'Demo account <span class="paper-pill">PAPER ONLY</span>';
+    syncQuickDemoBalance();
     $("quickDemoStatus").textContent = "Demo account selected · simulated cash only";
   } else if (selected === "REAL") {
     $("tournamentPanel").hidden = true;
     setAccountMode("REAL");
+    $("quickAccountLabel").innerHTML = 'Real account <span class="paper-pill">LOCKED</span>';
+    $("quickDemoBalance").textContent = "Unavailable";
     $("quickDemoStatus").textContent = "Real account locked · live orders disabled";
   } else {
     setAccountMode("DEMO");
@@ -2123,6 +2127,9 @@ function setUnifiedAccount(mode) {
     $("predictionTradeHistoryPanel").hidden = true;
     $("tournamentPanel").hidden = false;
     $("tournamentPanel").scrollIntoView({behavior:"smooth",block:"start"});
+    $("quickAccountLabel").innerHTML = 'Tournament account <span class="paper-pill">T COINS</span>';
+    const tournamentCoinText = $("tournamentCoins").textContent.match(/[0-9,]+/);
+    $("quickDemoBalance").textContent = tournamentCoinText ? tournamentCoinText[0]+" T" : "Sign in to view";
     $("quickDemoStatus").textContent = "Tournament selected · separate T coins";
     tournamentRefresh().catch(()=>{});
   }
@@ -2132,6 +2139,7 @@ function updateTournamentCoinBadge(user) {
   const coins=Number(user?.coins);
   if(Number.isFinite(coins)) {
     $("tournamentQuickCoins").textContent=coins.toLocaleString()+" T";
+    if($("accountSelector")?.value==="TOURNAMENT") $("quickDemoBalance").textContent=coins.toLocaleString()+" T";
   }
 }
 const originalTournamentShowSignedIn=tournamentShowSignedIn;
