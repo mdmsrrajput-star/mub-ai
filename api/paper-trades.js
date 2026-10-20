@@ -44,9 +44,17 @@ if not s.trades then s.trades = {} end
 if not s.realizedPnl then s.realizedPnl = 0 end
 
 if action == "status" then
-  if not raw then
-    redis.call("SET", KEYS[1], cjson.encode(s))
-  end
+  -- The shared demo ledger is authoritative. Prediction settlement updates
+  -- balance and cash together; reconcile legacy/stale aliases on every read
+  -- so the spot panel cannot display a different cash amount after refresh.
+  s.balance = tonumber(s.balance or s.cash or 10000)
+  s.cash = s.balance
+  if not s.active then s.active = {} end
+  if not s.history then s.history = {} end
+  if not s.positions then s.positions = {} end
+  if not s.trades then s.trades = {} end
+  if not s.realizedPnl then s.realizedPnl = 0 end
+  redis.call("SET", KEYS[1], cjson.encode(s))
   return cjson.encode(s)
 end
 
