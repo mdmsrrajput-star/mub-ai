@@ -116,6 +116,55 @@ export default async function handler(req, res) {
     let body = req.body || {};
     if (typeof body === "string") body = JSON.parse(body);
     const action = req.method === "GET" ? String(req.query?.action || "me") : String(body.action || "");
+
+    if (action === "request-password-reset") {
+      if (req.method !== "POST") return json(res, 405, { ok:false, error:"POST required" });
+      const email=String(body.email||"").trim().toLowerCase();
+      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return json(res,400,{ok:false,error:"Enter the registered email address."});
+      const emailHash=crypto.createHash("sha256").update(email).digest("hex");
+      const id=await redis(["GET","mub:tournament:email:"+emailHash]);
+      // Always return the same message so the endpoint does not disclose whether an email is registered.
+      if (id) {
+        const user=await getUser(id);
+        const resendKey=process.env.RESEND_API_KEY||"";
+        const from=process.env.TOURNAMENT_FROM_EMAIL||"";
+        if (user && resendKey && from) {
+          const rawToken=crypto.randomBytes(32).toString("base64url");
+          const tokenHash=crypto.createHash("sha256").update(rawToken).digest("hex");
+          await redis(["SET","mub:tournament:reset:"+tokenHash,JSON.stringify({userId:id,createdAt:Date.now()}),"EX",1800]);
+          const proto=String(req.headers["x-forwarded-proto"]||"https").split(",")[0].trim();
+          const host=String(req.headers.host||"");
+          const base=process.env.TOURNAMENT_PUBLIC_URL||((proto==="https"?"https://":"http://")+host);
+          const link=base+"/crypto/?tournamentReset="+encodeURIComponent(rawToken);
+          const mail=await fetch("https://api.resend.com/emails",{method:"POST",headers:{"Authorization":"Bearer "+resendKey,"Content-Type":"application/json"},body:JSON.stringify({from,to:[email],subject:"Reset your MuB tournament password",text:"Use this one-time link to reset your MuB tournament password. It expires in 30 minutes and can only be used once:\n\n"+link+"\n\nIf you did not request this, ignore this email."})});
+          if(!mail.ok) console.error("Tournament reset email failed:",mail.status);
+        } else {
+          console.error("Password recovery email is not configured (RESEND_API_KEY / TOURNAMENT_FROM_EMAIL).");
+        }
+      }
+      return json(res,200,{ok:true,message:"If that email is registered and recovery email is configured, a one-time reset link will arrive shortly. Check spam too."});
+    }
+    if (action === "reset-password") {
+      if (req.method !== "POST") return json(res,405,{ok:false,error:"POST required"});
+      const token=String(body.token||"");
+      const password=String(body.password||"");
+      if (password.length<10||password.length>128) return json(res,400,{ok:false,error:"New password must be 10–128 characters."});
+      if (token.length<30||token.length>200) return json(res,400,{ok:false,error:"Reset link is invalid or expired. Request a new one."});
+      const tokenHash=crypto.createHash("sha256").update(token).digest("hex");
+      const key="mub:tournament:reset:"+tokenHash;
+      const raw=await redis(["GET",key]);
+      if(!raw) return json(res,400,{ok:false,error:"Reset link is invalid or expired. Request a new one."});
+      let reset; try { reset=JSON.parse(raw); } catch { return json(res,400,{ok:false,error:"Reset link is invalid or expired. Request a new one."}); }
+      const user=await getUser(String(reset.userId||""));
+      if(!user) { await redis(["DEL",key]); return json(res,400,{ok:false,error:"Reset link is invalid or expired. Request a new one."}); }
+      const salt=crypto.randomBytes(16).toString("base64url");
+      const passwordHash=await new Promise((resolve,reject)=>crypto.pbkdf2(password,salt,210000,32,"sha256",(e,k)=>e?reject(e):resolve(k.toString("base64url"))));
+      user.salt=salt; user.passwordHash=passwordHash; user.passwordChangedAt=Date.now();
+      await redis(["SET",userKey(user.id),JSON.stringify(user)]);
+      await redis(["DEL",key]);
+      setCookie(res,makeSession(user.id));
+      return json(res,200,{ok:true,user:publicUser(user),message:"Password reset successfully. You are now signed in."});
+    }
     if (action === "register" || action === "login") {
       if (req.method !== "POST") return json(res, 405, { ok: false, error: "POST required" });
       const email = String(body.email || "").trim().toLowerCase();
