@@ -7,7 +7,7 @@
 <title>MuB Wallet · Personal</title>
 <style>
 :root{color-scheme:dark;--bg:#0b1020;--panel:#141c30;--border:#28334b;--text:#edf2ff;--muted:#9aa8c3;--green:#30d6a0;--blue:#85aaff;--red:#ff687d}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,Arial,sans-serif}header{padding:18px 15px;border-bottom:1px solid var(--border)}main{max-width:760px;margin:auto;padding:14px}.brand{font-size:22px;font-weight:800}.muted,.note{color:var(--muted);font-size:13px;line-height:1.6}.banner{background:#102c2a;border:1px solid #236d5a;color:#70efc4;padding:11px;border-radius:10px;font-size:12px;font-weight:800;margin-bottom:12px}.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:15px;margin-top:12px}.row{display:flex;align-items:center;gap:12px}.row>div:last-child{flex:1}.coin{width:44px;height:44px;display:grid;place-items:center;border-radius:50%;font-weight:900;background:#29344c}.value{font-size:19px;font-weight:800;overflow-wrap:anywhere}button,a.button{display:inline-block;border:1px solid var(--border);border-radius:9px;padding:11px 14px;background:#1b2740;color:var(--text);font-size:13px;font-weight:750;text-decoration:none;cursor:pointer}button.primary{background:#304c80;border-color:var(--blue)}button:disabled{opacity:.5}.status{margin-top:10px;font-size:13px;overflow-wrap:anywhere}.good{color:var(--green)}.warn{color:#ffd28a}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.small{font-size:12px;color:var(--muted)}footer{text-align:center;padding:24px 12px}@media(max-width:480px){main{padding:10px}.panel{padding:12px}.grid{grid-template-columns:1fr}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,Arial,sans-serif}header{padding:18px 15px;border-bottom:1px solid var(--border)}main{max-width:760px;margin:auto;padding:14px}.brand{font-size:22px;font-weight:800}.muted,.note{color:var(--muted);font-size:13px;line-height:1.6}.banner{background:#102c2a;border:1px solid #236d5a;color:#70efc4;padding:11px;border-radius:10px;font-size:12px;font-weight:800;margin-bottom:12px}.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:15px;margin-top:12px}.row{display:flex;align-items:center;gap:12px}.row>div:last-child{flex:1}.coin{width:44px;height:44px;display:grid;place-items:center;border-radius:50%;font-weight:900;background:#29344c}.value{font-size:19px;font-weight:800;overflow-wrap:anywhere}.balance{font-size:22px;font-weight:850;margin-top:3px}.unit{font-size:12px;color:var(--muted)}button,a.button{display:inline-block;border:1px solid var(--border);border-radius:9px;padding:11px 14px;background:#1b2740;color:var(--text);font-size:13px;font-weight:750;text-decoration:none;cursor:pointer}button.primary{background:#304c80;border-color:var(--blue)}button:disabled{opacity:.5}.status{margin-top:10px;font-size:13px;overflow-wrap:anywhere}.good{color:var(--green)}.warn{color:#ffd28a}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.small{font-size:12px;color:var(--muted)}.asset{border:1px solid var(--border);border-radius:10px;padding:12px}.asset strong{display:block}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}footer{text-align:center;padding:24px 12px}@media(max-width:480px){main{padding:10px}.panel{padding:12px}.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -16,37 +16,40 @@
 <div class="banner">PAPER TRADING ONLY · LIVE TRADING DISABLED · DEMO PROFITS ARE NOT WITHDRAWABLE</div>
 <section class="panel">
 <h2 style="margin:0 0 8px">Connect your existing wallet</h2>
-<p class="note">This first version is a connection-only preview. It does not create wallets, request recovery phrases, sign transactions, send funds, or connect to the MuB paper-trading balance.</p>
+<p class="note">MuB only requests your public TRON address. It does not create wallets, request recovery phrases, sign transactions, or send funds.</p>
 <button id="connectTron" class="primary">Connect TronLink</button>
 <button id="disconnect" disabled>Disconnect</button>
-<div id="connectionStatus" class="status warn">Not connected. Open this page inside the TronLink app's dApp browser to test a TRON connection.</div>
+<div id="connectionStatus" class="status warn">Not connected. Open this page in the TronLink app's dApp browser.</div>
 <div id="addressWrap" hidden style="margin-top:12px"><div class="small">Connected TRON address</div><div id="address" class="value"></div><button id="copyAddress" style="margin-top:9px">Copy address</button></div>
 </section>
 <section class="panel">
-<h2 style="margin:0 0 8px">Real USDT reserve</h2>
-<div class="row"><div class="coin" style="color:#30d6a0">₮</div><div><strong>Not configured yet</strong><div class="small">No real balance has been fetched or recorded by MuB.</div></div></div>
-<p class="note">This reserve will be kept separate from the demo trading ledger. Only real USDT verified on-chain or recorded through a reviewed funding process can appear here. Demo profits cannot be transferred or converted into real USDT.</p>
-<div class="status warn">Read-only preview · No deposits or withdrawals enabled</div>
-</section>
-<section class="panel">
-<h2 style="margin:0 0 12px">Assets planned</h2>
+<h2 style="margin:0 0 8px">On-chain wallet balances</h2>
+<p class="note">Live read-only lookup for the connected address on TRON Mainnet. These are wallet balances, not MuB demo profits or a payout reserve.</p>
 <div class="grid">
-<div class="row"><div class="coin">₿</div><div><strong>Bitcoin (BTC)</strong><div class="small">Connection and balance support not enabled yet</div></div></div>
-<div class="row"><div class="coin" style="color:#30d6a0">₮</div><div><strong>USDT · TRC20</strong><div class="small">TRON wallet connection only; token balance not enabled yet</div></div></div>
+<div class="asset"><div class="small">TRX · TRON Mainnet</div><div id="trxBalance" class="balance">—</div><div class="unit">TRX</div></div>
+<div class="asset"><div class="small">USDT · TRC20</div><div id="usdtBalance" class="balance">—</div><div class="unit">USDT</div></div>
 </div>
-<p class="note">A connected address is not proof of ownership of funds and does not mean MuB can move them. This page intentionally has no send, receive, deposit, withdrawal, or trading actions.</p>
+<div class="actions"><button id="refreshBalances" disabled>Refresh balances</button></div>
+<div id="balanceStatus" class="status warn">Connect your wallet to load balances. No transactions are enabled.</div>
+<div id="checkedAt" class="small" style="margin-top:6px"></div>
 </section>
 <section class="panel">
-<h2 style="margin:0 0 8px">Security rules</h2>
+<h2 style="margin:0 0 8px">Real USDT reserve / payout status</h2>
+<div class="row"><div class="coin" style="color:#30d6a0">₮</div><div><strong>Not configured</strong><div class="small">No payout reserve, funding ledger, or withdrawal system is enabled.</div></div></div>
+<p class="note">A wallet balance is not automatically MuB reserve funding. Demo profits remain simulated and non-withdrawable. Any future payout feature must be backed by legitimate real funds, reconciliation, and reviewed compliance controls.</p>
+<div class="status warn">Read-only only · No deposits, withdrawals, or payouts enabled</div>
+</section>
+<section class="panel">
+<h2 style="margin:0 0 12px">Security rules</h2>
 <ul class="note" style="padding-left:20px;margin-bottom:0">
 <li>Never enter or paste a seed phrase or private key into MuB.</li>
-<li>Review every wallet permission request inside your wallet app.</li>
-<li>TRC20 USDT needs a compatible TRON address; network mistakes can cause permanent loss.</li>
-<li>BTC support will require a separate Bitcoin-compatible wallet connection.</li>
-<li>Demo balances and simulated profits remain separate and non-withdrawable.</li>
+<li>Approve only public-address connection requests; reject transaction or token-approval requests.</li>
+<li>TRC20 USDT requires a compatible TRON address. Network mistakes can cause permanent loss.</li>
+<li>Bitcoin requires a separate Bitcoin-compatible wallet and balance integration.</li>
+<li>Wallet balances and demo trading balances stay separate.</li>
 </ul>
 </section>
-<p class="note" style="text-align:center">Connection-only prototype · No transactions are submitted or signed. Real reserve ledger and on-chain balance lookup are not yet configured.</p>
+<p class="note" style="text-align:center">Read-only wallet balance preview · No transactions are submitted or signed.</p>
 </main>
 <footer><a class="button" href="./">← Back to MuB Market Intelligence</a></footer>
 <script>
@@ -55,36 +58,78 @@ const connectButton=document.getElementById("connectTron");
 const disconnectButton=document.getElementById("disconnect");
 const addressWrap=document.getElementById("addressWrap");
 const addressEl=document.getElementById("address");
+const refreshButton=document.getElementById("refreshBalances");
+const balanceStatus=document.getElementById("balanceStatus");
+const trxBalance=document.getElementById("trxBalance");
+const usdtBalance=document.getElementById("usdtBalance");
+const checkedAt=document.getElementById("checkedAt");
 let connectedAddress="";
+function getTronWeb(){
+ return (window.tron && window.tron.tronWeb) || window.tronWeb || null;
+}
 function showAddress(address){
  connectedAddress=address||"";
  addressEl.textContent=connectedAddress;
  addressWrap.hidden=!connectedAddress;
  disconnectButton.disabled=!connectedAddress;
  connectButton.disabled=!!connectedAddress;
- statusEl.textContent=connectedAddress?"Connected to TronLink. No transaction permissions requested.":"Not connected.";
+ refreshButton.disabled=!connectedAddress;
+ statusEl.textContent=connectedAddress?"Connected to TronLink. Public address only; no transaction permissions requested.":"Not connected.";
  statusEl.className="status "+(connectedAddress?"good":"warn");
+ if(!connectedAddress) resetBalances();
+}
+function resetBalances(){
+ trxBalance.textContent="—";
+ usdtBalance.textContent="—";
+ checkedAt.textContent="";
+ balanceStatus.textContent="Connect your wallet to load balances. No transactions are enabled.";
+ balanceStatus.className="status warn";
+}
+async function loadBalances(){
+ if(!connectedAddress) return;
+ refreshButton.disabled=true;
+ balanceStatus.textContent="Fetching public balances from TRON Mainnet…";
+ balanceStatus.className="status";
+ try{
+  const response=await fetch("/api/tron-balances?address="+encodeURIComponent(connectedAddress),{method:"GET",cache:"no-store",headers:{Accept:"application/json"}});
+  const data=await response.json();
+  if(!response.ok||!data.ok) throw new Error(data.error||"Balance lookup failed.");
+  if(data.address!==connectedAddress) throw new Error("Address mismatch in balance response.");
+  trxBalance.textContent=Number(data.trx).toLocaleString(undefined,{maximumFractionDigits:6});
+  usdtBalance.textContent=Number(data.usdt).toLocaleString(undefined,{maximumFractionDigits:6});
+  checkedAt.textContent="Checked: "+new Date(data.checkedAt||Date.now()).toLocaleString()+" · "+(data.network||"TRON Mainnet");
+  balanceStatus.textContent="Read-only balance lookup complete. No funds were moved.";
+  balanceStatus.className="status good";
+ }catch(error){
+  balanceStatus.textContent="Could not load balances: "+(error&&error.message?error.message:"unknown error")+". You can retry.";
+  balanceStatus.className="status warn";
+ }finally{
+  refreshButton.disabled=!connectedAddress;
+ }
 }
 connectButton.addEventListener("click",async()=>{
  try{
-  if(!window.tronLink && !window.tronWeb){
-   statusEl.textContent="TronLink provider not found. Open this page in the TronLink app's dApp browser; connection is not simulated.";
-   statusEl.className="status warn";
-   return;
-  }
-  if(window.tronLink && typeof window.tronLink.request==="function"){
+  const provider=window.tron;
+  if(provider&&typeof provider.request==="function"){
+   await provider.request({method:"eth_requestAccounts"});
+  }else if(window.tronLink&&typeof window.tronLink.request==="function"){
    const result=await window.tronLink.request({method:"tron_requestAccounts"});
-   if(result && result.code && result.code!==200){throw new Error(result.message||"Wallet connection was not approved.");}
+   if(result&&result.code&&result.code!==200) throw new Error(result.message||"Wallet connection was not approved.");
+  }else if(!getTronWeb()){
+   throw new Error("TronLink provider not found. Open this page in TronLink's dApp browser.");
   }
-  const address=window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58;
-  if(!address) throw new Error("No approved TRON address was exposed. Approve connection in TronLink and try again.");
+  const tronWeb=getTronWeb();
+  const address=tronWeb&&tronWeb.defaultAddress&&tronWeb.defaultAddress.base58;
+  if(!address) throw new Error("No approved TRON address was exposed. Approve the connection in TronLink and retry.");
   showAddress(address);
+  await loadBalances();
  }catch(error){
   statusEl.textContent="Connection failed: "+(error&&error.message?error.message:"request rejected");
   statusEl.className="status warn";
  }
 });
 disconnectButton.addEventListener("click",()=>showAddress(""));
+refreshButton.addEventListener("click",loadBalances);
 document.getElementById("copyAddress").addEventListener("click",async()=>{
  try{
   await navigator.clipboard.writeText(connectedAddress);
@@ -94,8 +139,10 @@ document.getElementById("copyAddress").addEventListener("click",async()=>{
   statusEl.className="status warn";
  }
 });
-if(window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58){
- showAddress(window.tronWeb.defaultAddress.base58);
+const existingTronWeb=getTronWeb();
+if(existingTronWeb&&existingTronWeb.defaultAddress&&existingTronWeb.defaultAddress.base58){
+ showAddress(existingTronWeb.defaultAddress.base58);
+ loadBalances();
 }
 </script>
 </body>
