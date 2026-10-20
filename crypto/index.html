@@ -366,8 +366,13 @@ footer{padding:14px 10px}
       MANUAL · UP selected. Paper order placement remains locked until secure trade authorization is available.
     </div>
     <div class="note" id="tradeSignalStatus">
-      AUTO SIGNAL reads the crypto signal API; it does not place orders. Gold and forex signals are not enabled.
+      AUTO SIGNAL reads the crypto signal API. Continuous automation is paper-only and runs only while this dashboard remains open.
     </div>
+    <div class="controls section" role="group" aria-label="Continuous paper auto trade">
+      <button type="button" id="continuousAutoStart" style="flex:1;background:#245e4d;color:#fff">START AUTO LOOP</button>
+      <button type="button" id="continuousAutoStop" style="flex:1;background:#7c2d3a;color:#fff" disabled>STOP AUTO</button>
+    </div>
+    <div class="note" id="continuousAutoStatus" aria-live="polite">Auto loop stopped. Max 5 settled trades per batch; stops after 3 consecutive losses or 50% demo-balance drawdown. Next batch requires at least 3 wins out of 5.</div>
     <button type="button" id="startPredictionButton" class="section" style="width:100%;padding:13px;background:#245e4d;color:#ffffff;font-weight:700;border:1px solid #398c70;border-radius:9px">START PAPER PREDICTION</button>
     <div class="panel section" id="predictionAccountPanel">
       <div class="label">Shared demo available cash</div>
@@ -1799,6 +1804,110 @@ $("startPredictionButton").addEventListener("click", () => {
 });
 refreshPredictionAccount();
 predictionPollHandle = setInterval(refreshPredictionAccount, 2500);
+
+/* Continuous auto loop: paper predictions only; never invokes live execution. */
+let continuousAutoRunning=false;
+let continuousAutoBusy=false;
+let continuousBatch=[];
+let continuousSeenSettled=new Set();
+let continuousStartingBalance=10000;
+let continuousConsecutiveLosses=0;
+let continuousBatchNumber=0;
+function setContinuousAutoStatus(message){ $("continuousAutoStatus").textContent=message; }
+function stopContinuousAuto(message){
+  continuousAutoRunning=false;
+  $("continuousAutoStart").disabled=false;
+  $("continuousAutoStop").disabled=true;
+  $("continuousAutoStart").textContent="START AUTO LOOP";
+  paperExecutionMode="MANUAL";
+  updatePaperTradeControls();
+  setContinuousAutoStatus(message||"Auto loop stopped. Manual mode restored; open paper predictions will settle normally.");
+}
+async function getPaperSnapshot(){
+  const r=await fetch("/api/paper-predictions?_="+Date.now(),{cache:"no-store"});
+  const d=await r.json();
+  if(!r.ok||!d.ok) throw new Error(d.error||"Paper account unavailable");
+  return d.account||{};
+}
+async function continuousAutoStep(){
+  if(!continuousAutoRunning||continuousAutoBusy||accountMode!=="DEMO") return;
+  continuousAutoBusy=true;
+  try {
+    const account=await getPaperSnapshot();
+    const balance=Number(account.balance??continuousStartingBalance);
+    if(balance<=continuousStartingBalance*0.5){
+      stopContinuousAuto("SAFETY STOP: demo balance has fallen by 50% from the starting balance. Switched to Manual.");
+      return;
+    }
+    const active=Array.isArray(account.active)?account.active:(account.active&&account.active.status?[account.active]:[]);
+    const pending=active.filter(t=>t&&t.status==="PENDING");
+    const history=Array.isArray(account.history)?account.history:[];
+    const newSettled=history.filter(t=>t&&t.id&&!continuousSeenSettled.has(String(t.id)));
+    newSettled.reverse().forEach(t=>{
+      continuousSeenSettled.add(String(t.id));
+      continuousBatch.push(t);
+      if(t.result==="LOSS") continuousConsecutiveLosses++;
+      else if(t.result==="WIN") continuousConsecutiveLosses=0;
+    });
+    if(continuousConsecutiveLosses>=3){
+      stopContinuousAuto("SAFETY STOP: 3 consecutive losses recorded. Switched to Manual. Check trade history before restarting.");
+      return;
+    }
+    if(continuousBatch.length>=5){
+      const batch=continuousBatch.slice(0,5);
+      const wins=batch.filter(t=>t.result==="WIN").length;
+      const losses=batch.filter(t=>t.result==="LOSS").length;
+      continuousBatch=continuousBatch.slice(5);
+      continuousBatchNumber++;
+      if(wins<3){
+        stopContinuousAuto("Batch "+continuousBatchNumber+" complete: "+wins+"/5 wins, "+losses+" losses. Below 60% winners; switched to Manual.");
+        return;
+      }
+      setContinuousAutoStatus("Batch "+continuousBatchNumber+" complete: "+wins+"/5 wins. Starting next batch after settlement checks.");
+    }
+    if(pending.length){
+      setContinuousAutoStatus("Auto loop active · waiting for "+pending.length+" open paper prediction(s) to settle · Batch "+(continuousBatchNumber+1)+" · "+continuousBatch.length+"/5 settled.");
+      return;
+    }
+    if(continuousBatch.length>=5) return;
+    if(!["BTCUSDT","ETHUSDT"].includes(symbol)){
+      setContinuousAutoStatus("Paused: continuous auto currently supports BTC/USDT and ETH/USDT only. Select one of them.");
+      return;
+    }
+    const tf=selectedAnalysisTimeframe();
+    const response=await fetch("/api/crypto-signal?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&_="+Date.now(),{cache:"no-store"});
+    if(!response.ok) throw new Error("Fresh signal unavailable; no trade opened.");
+    const signal=await response.json();
+    const generated=Date.parse(signal.generatedAt);
+    const age=Date.now()-generated;
+    if(!Number.isFinite(age)||age<0||age>90000||!Number.isFinite(Number(signal.score))||Number(signal.score)<70||!["BUY","SELL"].includes(signal.signal)){
+      setContinuousAutoStatus("Auto loop active · no entry: signal is stale, below 70/100, or WAIT. Will recheck shortly.");
+      return;
+    }
+    const direction=signal.signal==="BUY"?"UP":"DOWN";
+    const started=await startPaperPrediction({direction});
+    if(started) setContinuousAutoStatus("Auto loop active · opened "+direction+" "+symbol+" · score "+signal.score+"/100 · stake "+formatUsd(paperAmount)+" · "+continuousBatch.length+"/5 batch trades settled.");
+  } catch(e) {
+    setContinuousAutoStatus("Auto loop paused safely: "+(e.message||"request failed")+". No real order was placed.");
+  } finally { continuousAutoBusy=false; }
+}
+$("continuousAutoStart")?.addEventListener("click",async()=>{
+  if(accountMode!=="DEMO"){setContinuousAutoStatus("Select Demo account first. Real account remains locked.");return;}
+  if(continuousAutoRunning)return;
+  const snapshot=await getPaperSnapshot().catch(()=>null);
+  if(!snapshot){setContinuousAutoStatus("Cannot start: paper account unavailable.");return;}
+  continuousStartingBalance=Number(snapshot.balance??10000);
+  continuousBatch=[]; continuousSeenSettled=new Set((snapshot.history||[]).filter(t=>t&&t.id).map(t=>String(t.id)));
+  continuousConsecutiveLosses=0; continuousBatchNumber=0; continuousAutoRunning=true;
+  paperExecutionMode="AUTO"; updatePaperTradeControls();
+  $("continuousAutoStart").disabled=true; $("continuousAutoStop").disabled=false;
+  $("continuousAutoStart").textContent="AUTO RUNNING";
+  setContinuousAutoStatus("Auto loop started in paper mode. Baseline "+formatUsd(continuousStartingBalance)+". Maximum five settled trades per batch; stop after 3 consecutive losses or 50% drawdown. Keep this page open.");
+  continuousAutoStep();
+});
+$("continuousAutoStop")?.addEventListener("click",()=>stopContinuousAuto());
+
+setInterval(()=>{if(continuousAutoRunning) continuousAutoStep();},3000);
 
 function updatePaperTradeControls() {
   $("manualModeButton").classList.toggle("active", paperExecutionMode === "MANUAL");
