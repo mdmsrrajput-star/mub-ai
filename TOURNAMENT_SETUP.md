@@ -24,3 +24,16 @@ Do not paste secrets into GitHub source, screenshots, or chat.
 ## Before public launch
 
 This is an initial implementation, not a compliance-approved cash-prize service. Add email verification, rate limiting/abuse controls, secure account recovery, a reviewed privacy/terms flow, admin tooling and deployment/runtime tests before public launch. Do not advertise the $25 as guaranteed or pay a winner until all checks and payment infrastructure are approved.
+
+
+## Password recovery email
+
+The tournament now restores the signed-in session from its secure HttpOnly cookie when the dashboard opens, and has a one-time password reset link flow.
+
+For password recovery email to send, configure these additional **Production** environment variables in Vercel, then redeploy:
+
+- `RESEND_API_KEY` — API key from your Resend account.
+- `TOURNAMENT_FROM_EMAIL` — a sender address verified in Resend, for example `MuB Tournament <tournament@your-verified-domain.example>`.
+- `TOURNAMENT_PUBLIC_URL` — optional canonical public base URL, such as `https://mub-brown.vercel.app`. Set this to the actual deployed domain so reset links point to the correct site.
+
+Reset links expire after 30 minutes and are single-use. If email variables are not configured, the page shows a generic response but no email can be delivered. Verify the sender domain in Resend before testing. Never put the Resend key in browser code or commit it to GitHub.
