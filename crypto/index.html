@@ -278,6 +278,24 @@ footer{padding:14px 10px}
         <button type="button" id="tournamentAuthSubmit" class="active">CREATE ACCOUNT</button>
       </div>
       <div class="note" id="tournamentAuthMessage" aria-live="polite">Password is processed on the server; never share it in chat.</div>
+
+      <div class="controls section" id="tournamentRecoveryControls">
+        <button type="button" id="tournamentForgotPassword">Forgot password?</button>
+      </div>
+      <div class="panel section" id="tournamentForgotPanel" hidden>
+        <div class="label">PASSWORD RECOVERY</div>
+        <div class="note">We'll email a one-time reset link to the address you registered with. The link expires after 30 minutes.</div>
+        <button type="button" id="tournamentSendReset" class="active section">EMAIL RESET LINK</button>
+        <div class="note" id="tournamentRecoveryMessage" aria-live="polite"></div>
+      </div>
+      <div class="panel section" id="tournamentResetPanel" hidden>
+        <div class="label">CHOOSE A NEW PASSWORD</div>
+        <label class="label section" for="tournamentNewPassword">New password (10–128 characters)</label>
+        <input id="tournamentNewPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Enter a new password">
+        <button type="button" id="tournamentResetSubmit" class="active section">RESET PASSWORD</button>
+        <div class="note" id="tournamentResetMessage" aria-live="polite"></div>
+      </div>
+
     </div>
     <div class="panel section" id="tournamentPlayPanel" hidden>
       <div class="controls">
@@ -1859,6 +1877,21 @@ function tournamentShowSignedOut() {
   tournamentEl("tournamentCoins").textContent = "—";
   tournamentEl("tournamentRecord").textContent = "Register or log in to view your score.";
 }
+
+async function tournamentRestoreSession() {
+  try {
+    const data=await tournamentRequest("me",{}, "GET");
+    tournamentShowSignedIn(data.user);
+    tournamentEl("tournamentJoinButton").textContent=data.user.joined?"JOINED TODAY ✓":"JOIN TODAY · FREE";
+    tournamentEl("tournamentJoinButton").disabled=!!data.user.joined;
+    tournamentEl("tournamentAuthMessage").textContent="Session restored. You're already logged in.";
+    return true;
+  } catch (_) {
+    tournamentShowSignedOut();
+    return false;
+  }
+}
+
 function tournamentUpdateAuthMode(mode) {
   tournamentAuthMode = mode;
   const registering = mode === "register";
@@ -1939,6 +1972,34 @@ tournamentEl("tournamentAuthSubmit").addEventListener("click", async () => {
     tournamentEl("tournamentAuthMessage").textContent = error.message;
   } finally { button.disabled = false; }
 });
+
+tournamentEl("tournamentForgotPassword")?.addEventListener("click",()=>{
+  const panel=tournamentEl("tournamentForgotPanel"); panel.hidden=!panel.hidden;
+  tournamentEl("tournamentRecoveryMessage").textContent="";
+});
+tournamentEl("tournamentSendReset")?.addEventListener("click",async()=>{
+  const button=tournamentEl("tournamentSendReset"); button.disabled=true;
+  tournamentEl("tournamentRecoveryMessage").textContent="Requesting reset link…";
+  try {
+    const data=await tournamentRequest("request-password-reset",{email:tournamentEl("tournamentEmail").value});
+    tournamentEl("tournamentRecoveryMessage").textContent=data.message;
+  } catch(e) { tournamentEl("tournamentRecoveryMessage").textContent=e.message; }
+  finally { button.disabled=false; }
+});
+tournamentEl("tournamentResetSubmit")?.addEventListener("click",async()=>{
+  const button=tournamentEl("tournamentResetSubmit"); button.disabled=true;
+  tournamentEl("tournamentResetMessage").textContent="Resetting password…";
+  try {
+    const token=new URLSearchParams(window.location.search).get("tournamentReset")||"";
+    const data=await tournamentRequest("reset-password",{token,password:tournamentEl("tournamentNewPassword").value});
+    tournamentShowSignedIn(data.user);
+    tournamentEl("tournamentResetMessage").textContent=data.message;
+    const url=new URL(window.location.href); url.searchParams.delete("tournamentReset"); history.replaceState({}, "", url.pathname+url.search+url.hash);
+    tournamentEl("tournamentResetPanel").hidden=true;
+  } catch(e) { tournamentEl("tournamentResetMessage").textContent=e.message; }
+  finally { button.disabled=false; }
+});
+
 tournamentEl("tournamentJoinButton").addEventListener("click", async () => {
   const button = tournamentEl("tournamentJoinButton"); button.disabled = true;
   try {
@@ -2002,7 +2063,8 @@ tournamentEl("tournamentPlayButton").addEventListener("click", async () => {
 });
 tournamentEl("tournamentRefreshButton").addEventListener("click", tournamentRefresh);
 tournamentUpdateAuthMode("register");
-tournamentRefresh();
+if (new URLSearchParams(window.location.search).has("tournamentReset")) { tournamentEl("tournamentResetPanel").hidden=false; tournamentEl("tournamentForgotPanel").hidden=true; }
+tournamentRestoreSession().then(()=>tournamentRefresh());
 setInterval(tournamentRefresh, 15000);
 
 </script>
