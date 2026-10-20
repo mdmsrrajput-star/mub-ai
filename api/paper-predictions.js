@@ -146,6 +146,7 @@ if action == "settle" then
    else
     s.balance = tonumber(s.balance or 10000) + pnl
    end
+   s.cash = s.balance
    a.status = "SETTLED"
    a.exitPrice = exit
    a.settledAt = tonumber(p.now)
