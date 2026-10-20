@@ -92,7 +92,14 @@ if type(s.active) == "table" and s.active.status then s.active = { s.active } en
 if type(s.active) ~= "table" then s.active = {} end
 local action = ARGV[1]
 local p = cjson.decode(ARGV[2])
-if action == "status" then return cjson.encode(s) end
+if action == "status" then
+ -- The shared ledger's balance is authoritative for the combined demo account.
+ -- Keep the spot-account cash alias in sync so the two dashboard panels cannot drift.
+ s.balance = tonumber(s.balance or s.cash or 10000)
+ s.cash = s.balance
+ redis.call("SET", KEYS[1], cjson.encode(s))
+ return cjson.encode(s)
+end
 if action == "start" then
  local amount = tonumber(p.amount)
  if not amount or amount < 1 or amount > 1000 then return redis.error_reply("Stake must be between $1 and $1,000") end
