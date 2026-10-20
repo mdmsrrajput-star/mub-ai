@@ -34,10 +34,23 @@
 <div id="checkedAt" class="small" style="margin-top:6px"></div>
 </section>
 <section class="panel">
-<h2 style="margin:0 0 8px">Real USDT reserve / payout status</h2>
-<div class="row"><div class="coin" style="color:#30d6a0">₮</div><div><strong>Not configured</strong><div class="small">No payout reserve, funding ledger, or withdrawal system is enabled.</div></div></div>
-<p class="note">A wallet balance is not automatically MuB reserve funding. Demo profits remain simulated and non-withdrawable. Any future payout feature must be backed by legitimate real funds, reconciliation, and reviewed compliance controls.</p>
-<div class="status warn">Read-only only · No deposits, withdrawals, or payouts enabled</div>
+<h2 style="margin:0 0 8px">Real USDT reserve dashboard</h2>
+<div class="row"><div class="coin" style="color:#30d6a0">₮</div><div><strong id="reserveHeadline">Checking reserve configuration…</strong><div id="reserveSub" class="small">Read-only TRON Mainnet verification</div></div></div>
+<div class="grid" style="margin-top:12px">
+<div class="asset"><div class="small">Reserve TRX</div><div id="reserveTrx" class="balance">—</div></div>
+<div class="asset"><div class="small">Reserve USDT · TRC20</div><div id="reserveUsdt" class="balance">—</div></div>
+</div>
+<div id="reserveAddressWrap" class="small" style="margin-top:9px;overflow-wrap:anywhere" hidden>Reserve address: <span id="reserveAddress"></span></div>
+<div id="reserveChecked" class="small" style="margin-top:6px">Last verified: not yet checked</div>
+<div id="reserveStatus" class="status warn">Payouts disabled. Reserve verification pending.</div>
+<div class="actions"><button id="refreshReserve">Refresh reserve status</button></div>
+<p class="note">On-chain balance is not proof of ownership, source of funds, or available payout capacity. This dashboard cannot move funds.</p>
+</section>
+<section class="panel">
+<h2 style="margin:0 0 8px">MuB demo account separation</h2>
+<div class="row"><div class="coin">P</div><div><strong>Paper-trading balance and demo profits</strong><div class="small">Simulation only · Not backed by on-chain funds</div></div></div>
+<div class="status warn">NON-WITHDRAWABLE · No conversion to real USDT enabled</div>
+<p class="note">Real reserve balances are displayed separately. No payout is enabled, even if the reserve has a positive balance.</p>
 </section>
 <section class="panel">
 <h2 style="margin:0 0 12px">Security rules</h2>
@@ -63,6 +76,15 @@ const balanceStatus=document.getElementById("balanceStatus");
 const trxBalance=document.getElementById("trxBalance");
 const usdtBalance=document.getElementById("usdtBalance");
 const checkedAt=document.getElementById("checkedAt");
+const reserveHeadline=document.getElementById("reserveHeadline");
+const reserveSub=document.getElementById("reserveSub");
+const reserveTrx=document.getElementById("reserveTrx");
+const reserveUsdt=document.getElementById("reserveUsdt");
+const reserveAddressWrap=document.getElementById("reserveAddressWrap");
+const reserveAddressEl=document.getElementById("reserveAddress");
+const reserveChecked=document.getElementById("reserveChecked");
+const reserveStatus=document.getElementById("reserveStatus");
+const refreshReserveButton=document.getElementById("refreshReserve");
 let connectedAddress="";
 function getTronWeb(){
  return (window.tron && window.tron.tronWeb) || window.tronWeb || null;
@@ -130,6 +152,50 @@ connectButton.addEventListener("click",async()=>{
 });
 disconnectButton.addEventListener("click",()=>showAddress(""));
 refreshButton.addEventListener("click",loadBalances);
+async function loadReserve(){
+ refreshReserveButton.disabled=true;
+ reserveStatus.textContent="Verifying reserve address and on-chain balances…";
+ reserveStatus.className="status";
+ try{
+  const response=await fetch("/api/tron-reserve",{method:"GET",cache:"no-store",headers:{Accept:"application/json"}});
+  const data=await response.json();
+  if(!response.ok||!data.ok) throw new Error(data.error||"Reserve status could not be verified.");
+  if(!data.configured){
+   reserveHeadline.textContent="Not configured";
+   reserveSub.textContent="Add TRON_RESERVE_ADDRESS in Vercel to designate a reserve address.";
+   reserveTrx.textContent="—"; reserveUsdt.textContent="—";
+   reserveAddressWrap.hidden=true;
+   reserveChecked.textContent="Last verified: not checked";
+   reserveStatus.textContent="PAYOUTS DISABLED · No reserve address configured.";
+   reserveStatus.className="status warn";
+   return;
+  }
+  reserveAddressWrap.hidden=false;
+  reserveAddressEl.textContent=data.address||"";
+  reserveTrx.textContent=Number(data.trx||0).toLocaleString(undefined,{maximumFractionDigits:6});
+  reserveUsdt.textContent=Number(data.usdt||0).toLocaleString(undefined,{maximumFractionDigits:6});
+  reserveChecked.textContent="Last checked: "+new Date(data.checkedAt||Date.now()).toLocaleString();
+  if(data.status==="READ_ONLY_VERIFIED"){
+   reserveHeadline.textContent="Read-only balance verified";
+   reserveSub.textContent="TRON Mainnet · USDT TRC20";
+   reserveStatus.textContent="PAYOUTS DISABLED · Balance verified; funding, ownership and eligibility still require separate review.";
+  }else{
+   reserveHeadline.textContent="Reserve not fully verified";
+   reserveSub.textContent=data.status||"Verification pending";
+   reserveStatus.textContent=data.message||data.error||"Reserve verification incomplete. Payouts remain disabled.";
+  }
+  reserveStatus.className="status warn";
+ }catch(error){
+  reserveHeadline.textContent="Verification unavailable";
+  reserveSub.textContent="Could not verify reserve status.";
+  reserveStatus.textContent=(error&&error.message?error.message:"Lookup failed")+" Payouts remain disabled.";
+  reserveStatus.className="status warn";
+ }finally{
+  refreshReserveButton.disabled=false;
+ }
+}
+refreshReserveButton.addEventListener("click",loadReserve);
+loadReserve();
 document.getElementById("copyAddress").addEventListener("click",async()=>{
  try{
   await navigator.clipboard.writeText(connectedAddress);
