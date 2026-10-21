@@ -180,6 +180,83 @@ export default async function handler(req, res) {
     const closes = candles.map(c => c.close);
     const last = candles[candles.length - 1];
 
+    // Candle-behaviour learning: classify completed candles and measure how
+    // the same historical setup behaved over the next three candles.
+    // This is rolling, out-of-sample-style historical statistics, not a claim
+    // that patterns predict the future or a trained ML model.
+    function classifyCandlePattern(index) {
+      if (index < 1 || index >= candles.length) return null;
+      const c = candles[index];
+      const p = candles[index - 1];
+      const range = c.high - c.low;
+      if (!(range > 0)) return null;
+      const body = Math.abs(c.close - c.open);
+      const upperWick = c.high - Math.max(c.open, c.close);
+      const lowerWick = Math.min(c.open, c.close) - c.low;
+      const bodyRatio = body / range;
+
+      if (bodyRatio <= 0.08) return { name: "DOJI", direction: "NEUTRAL" };
+
+      const prevBody = Math.abs(p.close - p.open);
+      const bullishEngulfing = p.close < p.open && c.close > c.open &&
+        c.open <= p.close && c.close >= p.open && body >= prevBody * 0.9;
+      if (bullishEngulfing) return { name: "BULLISH_ENGULFING", direction: "BUY" };
+
+      const bearishEngulfing = p.close > p.open && c.close < c.open &&
+        c.open >= p.close && c.close <= p.open && body >= prevBody * 0.9;
+      if (bearishEngulfing) return { name: "BEARISH_ENGULFING", direction: "SELL" };
+
+      if (lowerWick >= body * 2 && upperWick <= Math.max(body * 0.75, range * 0.08) &&
+          bodyRatio <= 0.38) {
+        return { name: c.close >= c.open ? "HAMMER" : "HANGING_MAN",
+          direction: c.close >= c.open ? "BUY" : "SELL" };
+      }
+      if (upperWick >= body * 2 && lowerWick <= Math.max(body * 0.75, range * 0.08) &&
+          bodyRatio <= 0.38) {
+        return { name: c.close <= c.open ? "SHOOTING_STAR" : "INVERTED_HAMMER",
+          direction: c.close <= c.open ? "SELL" : "BUY" };
+      }
+      return null;
+    }
+
+    const currentCandlePattern = classifyCandlePattern(candles.length - 1);
+    const candlePatternStats = {
+      pattern: currentCandlePattern?.name || "NO_CLEAR_PATTERN",
+      patternDirection: currentCandlePattern?.direction || "NEUTRAL",
+      horizonCandles: 3,
+      samples: 0,
+      wins: 0,
+      accuracyPercent: null,
+      learnedDirection: "NEUTRAL",
+      appliedAsFilter: false
+    };
+
+    if (currentCandlePattern && currentCandlePattern.direction !== "NEUTRAL") {
+      // Use only patterns with a fully observed three-candle outcome.
+      for (let i = 1; i <= candles.length - 4; i++) {
+        const historicalPattern = classifyCandlePattern(i);
+        if (!historicalPattern ||
+            historicalPattern.name !== currentCandlePattern.name ||
+            historicalPattern.direction !== currentCandlePattern.direction) continue;
+        const futureClose = candles[i + 3].close;
+        const entryClose = candles[i].close;
+        const move = futureClose - entryClose;
+        if (Math.abs(move) <= 0) continue;
+        candlePatternStats.samples++;
+        const success = currentCandlePattern.direction === "BUY" ? move > 0 : move < 0;
+        if (success) candlePatternStats.wins++;
+      }
+      if (candlePatternStats.samples > 0) {
+        candlePatternStats.accuracyPercent = Math.round(
+          candlePatternStats.wins / candlePatternStats.samples * 100
+        );
+      }
+      if (candlePatternStats.samples >= 8 &&
+          candlePatternStats.accuracyPercent >= 58) {
+        candlePatternStats.learnedDirection = currentCandlePattern.direction;
+      }
+    }
+
     const ema20Series = emaSeries(closes, 20);
     const ema50Series = emaSeries(closes, 50);
 
@@ -351,6 +428,12 @@ export default async function handler(req, res) {
 
     const reasons = [
       "Analysis uses completed " + tf.interval + " candles",
+      currentCandlePattern
+        ? "Current candle pattern: " + currentCandlePattern.name + " (" + currentCandlePattern.direction + ")"
+        : "No recognised candle pattern on the latest completed candle",
+      "Rolling candle-pattern sample: " + candlePatternStats.samples + " matches; accuracy " +
+        (candlePatternStats.accuracyPercent === null ? "not available" : candlePatternStats.accuracyPercent + "%") +
+        "; requires 8 samples and 58% accuracy before use",
       tf.trend + " trend: " + trend,
       "Indicator agreement: " + agreementPercent.toFixed(0) + "%",
       fvg
@@ -396,6 +479,20 @@ export default async function handler(req, res) {
       );
     }
 
+    // Pattern statistics can only make the system more selective. They never
+    // create a BUY/SELL signal by themselves; a reliable opposite pattern vetoes.
+    if (signal !== "WAIT" &&
+        candlePatternStats.learnedDirection !== "NEUTRAL" &&
+        candlePatternStats.learnedDirection !== signal) {
+      signal = "WAIT";
+      candlePatternStats.appliedAsFilter = true;
+      reasons.push("Signal vetoed: historically reliable candle pattern conflicts with the setup");
+    } else if (signal !== "WAIT" &&
+        candlePatternStats.learnedDirection === signal) {
+      candlePatternStats.appliedAsFilter = true;
+      reasons.push("Candle-pattern history supports the strict setup; this is not a win-probability estimate");
+    }
+
     return res.status(200).json({
       mode: "PAPER_ONLY",
       executionEnabled: false,
@@ -409,6 +506,7 @@ export default async function handler(req, res) {
       agreementIsWinProbability: false,
       votes,
       reasons,
+      candleLearning: candlePatternStats,
       fvg,
       orderBlocks,
       trend,
