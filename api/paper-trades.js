@@ -269,22 +269,55 @@ async function getPrice(symbol) {
     throw new Error("Only BTCUSDT and ETHUSDT are supported");
   }
 
-  const response = await fetch(
-    `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`
-  );
+  // Use multiple public read-only providers so a temporary Binance endpoint
+  // or regional/network failure does not stop paper position management.
+  const baseAsset = symbol === "BTCUSDT" ? "BTC" : "ETH";
+  const providers = [
+    async () => {
+      const response = await fetch(
+        `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (!response.ok) throw new Error("Binance ticker HTTP " + response.status);
+      return (await response.json()).price;
+    },
+    async () => {
+      const response = await fetch(
+        `https://data-api.binance.vision/api/v3/ticker/price?symbol=${symbol}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (!response.ok) throw new Error("Binance public data HTTP " + response.status);
+      return (await response.json()).price;
+    },
+    async () => {
+      const response = await fetch(
+        `https://api.coinbase.com/v2/prices/${baseAsset}-USD/spot`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (!response.ok) throw new Error("Coinbase spot HTTP " + response.status);
+      const data = await response.json();
+      // Coinbase quotes USD rather than USDT; close enough for this paper-only
+      // fallback, but log the source so the difference is visible in diagnostics.
+      return data?.data?.amount;
+    }
+  ];
 
-  if (!response.ok) {
-    throw new Error("Could not retrieve the public market price");
+  const failures = [];
+  for (let i = 0; i < providers.length; i++) {
+    try {
+      const price = Number(await providers[i]());
+      if (Number.isFinite(price) && price > 0) {
+        if (i > 0) console.warn("Paper price provider fallback used:", symbol, i === 1 ? "binance-vision" : "coinbase-usd");
+        return price;
+      }
+      failures.push("provider-" + (i + 1) + " invalid price");
+    } catch (error) {
+      failures.push("provider-" + (i + 1) + ": " + String(error?.message || "failed"));
+    }
   }
 
-  const data = await response.json();
-  const price = Number(data.price);
-
-  if (!Number.isFinite(price) || price <= 0) {
-    throw new Error("Invalid market price received");
-  }
-
-  return price;
+  console.error("All paper price providers failed:", JSON.stringify({ symbol, failures }));
+  throw new Error("Could not retrieve a public market price from any configured provider");
 }
 
 export default async function handler(req, res) {
