@@ -4,7 +4,7 @@ const LEGACY_SPOT_KEY = "mub:paper:account:v1";
 const STARTING_BALANCE = 10000;
 const MAX_STAKE = 1000;
 const PAYOUT_RATE = 1.0;
-const ALLOWED_SYMBOLS = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","XAGUSD"];
+const ALLOWED_SYMBOLS = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","XAGUSD","XAUUSD"];
 const EXPIRIES = { "1m": 60000, "5m": 300000, "10m": 600000, "15m": 900000, "30m": 1800000, "1h": 3600000 };
 
 function send(res, status, data) {
@@ -33,10 +33,10 @@ async function redisCommand(command) {
 }
 async function getPrice(symbol) {
   if (!ALLOWED_SYMBOLS.includes(symbol)) throw new Error("Supported crypto, forex and silver symbols");
-  if (["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","XAGUSD"].includes(symbol)) {
+  if (["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","XAGUSD","XAUUSD"].includes(symbol)) {
     const apiKey = process.env.TWELVE_DATA_API_KEY;
     if (!apiKey) throw new Error("Forex data is not configured. Add TWELVE_DATA_API_KEY in Vercel environment variables.");
-    const pair = ({EURUSD:"EUR/USD",GBPUSD:"GBP/USD",USDJPY:"USD/JPY",AUDUSD:"AUD/USD",USDCAD:"USD/CAD",USDCHF:"USD/CHF",NZDUSD:"NZD/USD",EURJPY:"EUR/JPY",GBPJPY:"GBP/JPY",XAGUSD:"XAG/USD"})[symbol];
+    const pair = ({EURUSD:"EUR/USD",GBPUSD:"GBP/USD",USDJPY:"USD/JPY",AUDUSD:"AUD/USD",USDCAD:"USD/CAD",USDCHF:"USD/CHF",NZDUSD:"NZD/USD",EURJPY:"EUR/JPY",GBPJPY:"GBP/JPY",XAGUSD:"XAG/USD",XAUUSD:"XAU/USD"})[symbol];
     const url = "https://api.twelvedata.com/price?symbol=" + encodeURIComponent(pair) + "&apikey=" + encodeURIComponent(apiKey);
     const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
     if (!response.ok) throw new Error("Forex price provider returned HTTP " + response.status);
