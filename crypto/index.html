@@ -1633,8 +1633,42 @@ let predictionPollHandle = null;
 function formatUsd(value) {
   return "$" + Number(value || 0).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
 }
+function syncPredictionChartMarkers(account) {
+  if (!candleSeries || typeof candleSeries.setMarkers !== "function") return;
+  const active = Array.isArray(account.active) ? account.active : (account.active && account.active.status ? [account.active] : []);
+  const history = Array.isArray(account.history) ? account.history : [];
+  const trades = [...active.filter(t => t && t.status === "PENDING"), ...history];
+  const markers = [];
+  for (const t of trades) {
+    if (!t || t.symbol !== symbol) continue;
+    const entryTime = Math.floor(Number(t.startedAt || t.timestamp || 0) / 1000);
+    const entryPrice = Number(t.entryPrice);
+    if (entryTime > 0 && Number.isFinite(entryPrice) && entryPrice > 0) {
+      const up = t.direction === "UP";
+      markers.push({
+        time: entryTime, position: up ? "belowBar" : "aboveBar",
+        color: up ? "#30d6a0" : "#ff687d", shape: up ? "arrowUp" : "arrowDown",
+        text: (t.source === "AUTO" ? "AUTO " : "MANUAL ") + (up ? "UP" : "DOWN") + " entry"
+      });
+    }
+    const exitTime = Math.floor(Number(t.settledAt || 0) / 1000);
+    const exitPrice = Number(t.exitPrice);
+    if (t.status === "SETTLED" && exitTime > 0 && Number.isFinite(exitPrice) && exitPrice > 0) {
+      markers.push({
+        time: exitTime, position: t.result === "WIN" ? "aboveBar" : "belowBar",
+        color: t.result === "WIN" ? "#30d6a0" : "#ff687d",
+        shape: "circle",
+        text: (t.source === "AUTO" ? "AUTO " : "MANUAL ") + (t.result || "CLOSED") + " exit"
+      });
+    }
+  }
+  markers.sort((a,b) => a.time - b.time);
+  try { candleSeries.setMarkers(markers); } catch (_) {}
+}
+
 function renderPredictionAccount(data) {
   const account = data && data.account ? data.account : {};
+  syncPredictionChartMarkers(account);
   $("predictionBalance").textContent = formatUsd(account.balance ?? 10000);
   const activeList = Array.isArray(account.active)
     ? account.active
@@ -1659,7 +1693,7 @@ function renderPredictionAccount(data) {
         const details = document.createElement("div");
         details.className = "note";
         const remaining = Math.max(0,Math.ceil((Number(t.expiresAt)-Date.now())/1000));
-        details.textContent = "Stake " + formatUsd(t.stake) + " · Entry " + Number(t.entryPrice||0).toLocaleString("en-US",{maximumFractionDigits:8}) + " · Expires in " + remaining + "s";
+        details.textContent = (t.source === "AUTO" ? "AUTO" : "MANUAL") + " · " + (t.timeframe || t.expiry || "") + " · Stake " + formatUsd(t.stake) + " · Entry " + Number(t.entryPrice||0).toLocaleString("en-US",{maximumFractionDigits:8}) + " · Expires in " + remaining + "s";
         const right = document.createElement("div");
         right.style.cssText = "text-align:right;font-weight:700;color:var(--blue)";
         right.textContent = "PENDING";
@@ -1705,11 +1739,11 @@ function renderPredictionAccount(data) {
     right.style.textAlign = "right";
     const title = document.createElement("div");
     title.style.fontWeight = "700";
-    title.textContent = (t.result || "SETTLED") + " · " + (t.symbol || "");
+    title.textContent = (t.result || "SETTLED") + " · " + (t.symbol || "") + " · " + (t.source === "AUTO" ? "AUTO" : "MANUAL");
     title.style.color = t.result === "WIN" ? "var(--green)" : t.result === "LOSS" ? "var(--red)" : "var(--text)";
     const detail = document.createElement("div");
     detail.className = "note";
-    detail.textContent = (t.direction || "") + " · Stake " + formatUsd(t.stake) +
+    detail.textContent = (t.direction || "") + " · " + (t.timeframe || t.expiry || "") + " · Stake " + formatUsd(t.stake) +
       " · " + (t.expiry || "");
     const pnl = document.createElement("div");
     pnl.style.fontWeight = "700";
