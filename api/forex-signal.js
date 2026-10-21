@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "GET") { res.setHeader("Allow", "GET"); return res.status(405).json({ error: "Method not allowed" }); }
-  const symbols = { EURUSD:"EUR/USD", GBPUSD:"GBP/USD", USDJPY:"USD/JPY", AUDUSD:"AUD/USD", USDCAD:"USD/CAD", USDCHF:"USD/CHF", NZDUSD:"NZD/USD", EURJPY:"EUR/JPY", GBPJPY:"GBP/JPY", XAGUSD:"XAG/USD" };
+  const symbols = { EURUSD:"EUR/USD", GBPUSD:"GBP/USD", USDJPY:"USD/JPY", AUDUSD:"AUD/USD", USDCAD:"USD/CAD", USDCHF:"USD/CHF", NZDUSD:"NZD/USD", EURJPY:"EUR/JPY", GBPJPY:"GBP/JPY", XAGUSD:"XAG/USD", XAUUSD:"XAU/USD" };
   const symbol = String(req.query?.symbol || "EURUSD").toUpperCase();
   const requested = String(req.query?.timeframe || "5m");
   const intervals = { "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min", "1h": "1h", "4h": "4h", "1d": "1day" };
