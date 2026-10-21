@@ -9,7 +9,7 @@ export default async function handler(req, res) {
 
   const cryptoSymbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT"];
   const forexSymbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"];
-  const metalsWithSignalFeed = ["XAGUSD"];
+  const metalsWithSignalFeed = ["XAUUSD", "XAGUSD"];
   const cryptoTimeframes = ["1m", "5m", "10m", "15m"];
   const providerTimeframes = ["1m", "5m", "15m"];
   const results = [];
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
           data.mode === "PAPER_ONLY" &&
           data.liveTradingEnabled === false &&
           Number.isFinite(price) && price > 0 &&
-          (job.market !== "CRYPTO" || Number(data.agreementPercent) >= 100);
+          (job.market === "CRYPTO" ? Number(data.agreementPercent) >= 100 : Number(data.score) >= 65);
         results.push({
           ...job,
           signal: side || "WAIT",
@@ -52,8 +52,8 @@ export default async function handler(req, res) {
           candleTime: data.candle?.time || data.candles?.at?.(-1)?.time || null,
           generatedAt: data.generatedAt || null,
           eligible,
-          executionSupported: job.market === "CRYPTO" && ["BTCUSDT", "ETHUSDT"].includes(job.symbol),
-          reason: eligible ? (job.market === "CRYPTO" && ["BTCUSDT", "ETHUSDT"].includes(job.symbol) ? "Signal qualified; paper prediction can be considered" : "Signal qualified for review; automated paper execution not yet supported for this market") : (data.reasons || ["No qualifying signal"]).join("; ")
+          executionSupported: ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","XAUUSD","XAGUSD"].includes(job.symbol),
+          reason: eligible ? ("Signal qualified for paper prediction review; signal score is a rule score, not win probability") : (data.reasons || ["No qualifying signal"]).join("; ")
         });
       } catch (error) {
         results.push({ ...job, signal: "UNAVAILABLE", eligible: false, reason: String(error?.message || "Scan failed") });
@@ -71,12 +71,12 @@ export default async function handler(req, res) {
       mode: "PAPER_ONLY",
       liveTradingEnabled: false,
       executionEnabled: false,
-      scanUniverse: { crypto: cryptoSymbols, forex: forexSymbols, metalsWithSignalFeed, cryptoTimeframes, forexAndSilverTimeframes: providerTimeframes, gold: "not scanned: current gold endpoint provides quote only, not candles" },
+      scanUniverse: { crypto: cryptoSymbols, forex: forexSymbols, metalsWithSignalFeed, cryptoTimeframes, forexAndSilverTimeframes: providerTimeframes, gold: "XAUUSD is scanned through Twelve Data candle signal endpoint" },
       scanned: results.length,
       qualifiedCount: eligible.length,
       bestCandidate: eligible[0] || null,
       results,
-      note: "Scanner is read-only and never places orders. Crypto signals use strict FVG/order-block/indicator rules; forex and silver use the existing EMA/RSI signal endpoint. The existing UP/DOWN paper prediction settlement engine supports crypto only. Forex, metals, and crypto spot-position settlement must not be auto-executed until their price/expiry settlement paths are verified."
+      note: "Scanner is read-only and never places orders. Crypto signals use strict FVG/order-block/indicator rules; forex and silver use the existing EMA/RSI signal endpoint. The paper prediction engine has current-price adapters for supported crypto pairs, listed forex pairs, silver, and gold. Forex/metal data-provider plan coverage and live deployment still require runtime verification."
     });
   } catch (error) {
     console.error("MuB auto scan failed:", error?.message || error);
