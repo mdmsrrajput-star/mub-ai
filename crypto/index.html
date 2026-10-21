@@ -2060,6 +2060,13 @@ document.querySelectorAll("#timeframes button").forEach(b=>{
 
 async function start() {
   try {
+    // Keep the market selectors visibly aligned with the dashboard defaults
+    // on every fresh page load; selecting another market still uses the
+    // existing change handlers.
+    if ($("cryptoSelect")) $("cryptoSelect").value = CRYPTO_SYMBOLS.includes(symbol) ? symbol : "BTCUSDT";
+    if ($("metalsSelect")) $("metalsSelect").value = "XAGUSD";
+    if ($("forexSelect")) $("forexSelect").value = "EURUSD";
+    selectedMarketCategory = "cryptoSelect";
     createChart();
     await loadHistory();
     connectMarketSocket();
