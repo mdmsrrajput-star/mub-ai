@@ -299,6 +299,20 @@ async function getPrice(symbol) {
       // Coinbase quotes USD rather than USDT; close enough for this paper-only
       // fallback, but log the source so the difference is visible in diagnostics.
       return data?.data?.amount;
+    },
+    async () => {
+      const pair = symbol === "BTCUSDT" ? "XBTUSDT" : "ETHUSDT";
+      const response = await fetch(
+        `https://api.kraken.com/0/public/Ticker?pair=${pair}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (!response.ok) throw new Error("Kraken ticker HTTP " + response.status);
+      const data = await response.json();
+      if (Array.isArray(data?.error) && data.error.length) {
+        throw new Error("Kraken ticker API returned an error");
+      }
+      const ticker = data?.result && Object.values(data.result)[0];
+      return ticker?.c?.[0];
     }
   ];
 
@@ -307,7 +321,7 @@ async function getPrice(symbol) {
     try {
       const price = Number(await providers[i]());
       if (Number.isFinite(price) && price > 0) {
-        if (i > 0) console.warn("Paper price provider fallback used:", symbol, i === 1 ? "binance-vision" : "coinbase-usd");
+        if (i > 0) console.warn("Paper price provider fallback used:", symbol, ["binance-vision", "coinbase-usd", "kraken"][i - 1] || "unknown");
         return price;
       }
       failures.push("provider-" + (i + 1) + " invalid price");
