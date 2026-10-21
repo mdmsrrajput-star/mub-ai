@@ -1909,7 +1909,7 @@ async function continuousAutoStep(){
     if(!response.ok) throw new Error("Multi-asset scan unavailable; no trade opened.");
     const scan=await response.json();
     if(scan.mode!=="PAPER_ONLY"||scan.liveTradingEnabled!==false||scan.executionEnabled!==false) throw new Error("Scanner safety check failed.");
-    const candidate=(scan.results||[]).find(x=>x.eligible&&["BUY","SELL"].includes(x.signal)&&["1m","5m","10m","15m"].includes(x.timeframe)&&["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT"].includes(x.symbol));
+    const candidate=(scan.results||[]).find(x=>x.eligible&&x.executionSupported&&["BUY","SELL"].includes(x.signal)&&["1m","5m","10m","15m"].includes(x.timeframe)&&["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","XAUUSD","XAGUSD"].includes(x.symbol));
     if(!candidate){
       setContinuousAutoStatus("Auto scan checked "+Number(scan.scanned||0)+" crypto/timeframe combinations; no strict qualifying signal. Waiting.");
       return;
