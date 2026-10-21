@@ -5,7 +5,7 @@ const STARTING_BALANCE = 10000;
 const MAX_STAKE = 1000;
 const PAYOUT_RATE = 1.0;
 const ALLOWED_SYMBOLS = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","XAGUSD"];
-const EXPIRIES = { "1m": 60000, "3m": 180000, "5m": 300000, "15m": 900000, "30m": 1800000, "1h": 3600000 };
+const EXPIRIES = { "1m": 60000, "5m": 300000, "10m": 600000, "15m": 900000, "30m": 1800000, "1h": 3600000 };
 
 function send(res, status, data) {
   return res.status(status).json({ mode: "PAPER_ONLY", liveTradingEnabled: false, ...data });
@@ -124,6 +124,7 @@ if action == "start" then
  s.cash = s.balance
  table.insert(s.active, {
   id = p.id, idempotencyKey = p.idempotencyKey, symbol = p.symbol, direction = p.direction, stake = amount,
+  source = p.source or "MANUAL", timeframe = p.timeframe or p.expiry,
   expiry = p.expiry, entryPrice = tonumber(p.price), startedAt = tonumber(p.now),
   expiresAt = tonumber(p.now) + tonumber(p.duration), status = "PENDING",
   payoutRate = 1.0, stakeDeducted = true
@@ -227,6 +228,8 @@ export default async function handler(req, res) {
     const account = await ledger("start", {
       id: `paper-${now}-${Math.random().toString(36).slice(2, 9)}`,
       symbol, direction, expiry, amount, price, now, duration: EXPIRIES[expiry],
+      source: body.source === "AUTO" ? "AUTO" : "MANUAL",
+      timeframe: ["1m","5m","10m","15m"].includes(String(body.timeframe || expiry)) ? String(body.timeframe || expiry) : expiry,
       idempotencyKey: typeof body.idempotencyKey === "string" && /^[A-Za-z0-9:_|.-]{8,180}$/.test(body.idempotencyKey)
         ? body.idempotencyKey : null
     });
