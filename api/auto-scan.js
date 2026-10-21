@@ -7,44 +7,53 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, mode: "PAPER_ONLY", liveTradingEnabled: false, error: "Use GET" });
   }
 
-  const symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT"];
-  const timeframes = ["1m", "5m", "10m", "15m"];
+  const cryptoSymbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT"];
+  const forexSymbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"];
+  const metalsWithSignalFeed = ["XAGUSD"];
+  const cryptoTimeframes = ["1m", "5m", "10m", "15m"];
+  const providerTimeframes = ["1m", "5m", "15m"];
   const results = [];
-  const concurrency = 4;
-  const queue = symbols.flatMap(symbol => timeframes.map(timeframe => ({ symbol, timeframe })));
+  const concurrency = 12;
+  const queue = [
+    ...cryptoSymbols.flatMap(symbol => cryptoTimeframes.map(timeframe => ({ symbol, timeframe, market: "CRYPTO", endpoint: "crypto-signal" }))),
+    ...forexSymbols.flatMap(symbol => providerTimeframes.map(timeframe => ({ symbol, timeframe, market: "FOREX", endpoint: "forex-signal" }))),
+    ...metalsWithSignalFeed.flatMap(symbol => providerTimeframes.map(timeframe => ({ symbol, timeframe, market: "METALS", endpoint: "forex-signal" })))
+  ];
   let cursor = 0;
 
   async function worker() {
     while (cursor < queue.length) {
       const job = queue[cursor++];
       try {
-        const url = new URL("/api/crypto-signal", `https://${req.headers.host || "mub-brown.vercel.app"}`);
+        const url = new URL("/api/" + job.endpoint, `https://${req.headers.host || "mub-brown.vercel.app"}`);
         url.searchParams.set("symbol", job.symbol);
         url.searchParams.set("timeframe", job.timeframe);
-        const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(12000) });
+        const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(8000) });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.error) {
           results.push({ ...job, signal: "UNAVAILABLE", eligible: false, reason: data.detail || data.error || "Signal unavailable" });
           continue;
         }
         const side = data.signal;
+        const price = Number(data.candle?.close ?? data.candles?.at?.(-1)?.close);
+        const agreement = Number(data.agreementPercent ?? data.score);
         const eligible = (side === "BUY" || side === "SELL") &&
           data.mode === "PAPER_ONLY" &&
           data.liveTradingEnabled === false &&
-          Number.isFinite(Number(data.candle?.close)) &&
-          Number(data.candle.close) > 0 &&
-          Number(data.agreementPercent) >= 100;
+          Number.isFinite(price) && price > 0 &&
+          (job.market !== "CRYPTO" || Number(data.agreementPercent) >= 100);
         results.push({
           ...job,
           signal: side || "WAIT",
           score: Number(data.score) || 0,
-          agreementPercent: Number(data.agreementPercent) || 0,
+          agreementPercent: Number.isFinite(agreement) ? agreement : 0,
           trend: data.trend || "UNKNOWN",
-          price: Number(data.candle?.close) || null,
-          candleTime: data.candle?.time || null,
+          price: Number.isFinite(price) ? price : null,
+          candleTime: data.candle?.time || data.candles?.at?.(-1)?.time || null,
           generatedAt: data.generatedAt || null,
           eligible,
-          reason: eligible ? "Strict signal qualified; paper execution eligibility only" : (data.reasons || ["No qualifying signal"]).join("; ")
+          executionSupported: job.market === "CRYPTO" && ["BTCUSDT", "ETHUSDT"].includes(job.symbol),
+          reason: eligible ? (job.market === "CRYPTO" && ["BTCUSDT", "ETHUSDT"].includes(job.symbol) ? "Signal qualified; paper prediction can be considered" : "Signal qualified for review; automated paper execution not yet supported for this market") : (data.reasons || ["No qualifying signal"]).join("; ")
         });
       } catch (error) {
         results.push({ ...job, signal: "UNAVAILABLE", eligible: false, reason: String(error?.message || "Scan failed") });
@@ -62,12 +71,12 @@ export default async function handler(req, res) {
       mode: "PAPER_ONLY",
       liveTradingEnabled: false,
       executionEnabled: false,
-      scanUniverse: { crypto: symbols, timeframes, marketsNotYetSupportedByExecutor: ["metals", "forex"] },
+      scanUniverse: { crypto: cryptoSymbols, forex: forexSymbols, metalsWithSignalFeed, cryptoTimeframes, forexAndSilverTimeframes: providerTimeframes, gold: "not scanned: current gold endpoint provides quote only, not candles" },
       scanned: results.length,
       qualifiedCount: eligible.length,
       bestCandidate: eligible[0] || null,
       results,
-      note: "This endpoint scans and ranks crypto only; it does not place orders. The current paper-trades ledger supports BTCUSDT and ETHUSDT only. Metals and forex require a separate verified paper price/settlement implementation."
+      note: "Scanner is read-only and never places orders. Crypto signals use strict FVG/order-block/indicator rules; forex and silver use the existing EMA/RSI signal endpoint. The existing UP/DOWN paper prediction settlement engine supports crypto only. Forex, metals, and crypto spot-position settlement must not be auto-executed until their price/expiry settlement paths are verified."
     });
   } catch (error) {
     console.error("MuB auto scan failed:", error?.message || error);
