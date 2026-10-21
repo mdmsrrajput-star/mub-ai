@@ -1786,8 +1786,8 @@ async function startPaperPrediction(options = {}) {
     return false;
   }
   if (predictionRequestBusy) return;
-  if (!(CRYPTO_SYMBOLS.includes(symbol) || FOREX_SYMBOLS.includes(symbol) || symbol === "XAGUSD")) {
-    $("predictionStatus").textContent = "Selected market is not enabled for paper predictions. Gold remains spot-view only.";
+  if (!(CRYPTO_SYMBOLS.includes(symbol) || FOREX_SYMBOLS.includes(symbol) || symbol === "XAGUSD" || symbol === "XAUUSD")) {
+    $("predictionStatus").textContent = "Selected market is not enabled for paper predictions.";
     return;
   }
   if (!updatePaperAmount()) {
