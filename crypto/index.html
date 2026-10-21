@@ -310,9 +310,20 @@ footer{padding:14px 10px}
     <button type="button" id="realAccountTab" role="tab" aria-selected="false">REAL ACCOUNT · LOCKED</button>
   </div>
   <div class="panel section" id="realAccountLockedPanel" hidden>
-    <h2>Real account is not connected</h2>
-    <div class="value negative">REAL TRADING DISABLED</div>
-    <div class="note section">MuB has no broker/exchange account connection or live-order authorization. This tab is informational only. No deposits, account credentials, or real orders can be handled here. Switch to Demo Account to continue paper trading.</div>
+    <h2>Real account · setup required</h2>
+    <div class="value negative">REAL TRADING AND DEPOSITS DISABLED</div>
+    <div class="note section">Real-money features are not connected. Do not send funds to MuB yet.</div>
+    <div class="section">
+      <div class="label">PLANNED FUNDING REQUIREMENTS</div>
+      <div class="note">Minimum deposit: $5 equivalent, subject to payment-provider minimums and fees.</div>
+      <div class="note">Planned methods: credit card, debit card, online banking, UPI, USDT and BTC.</div>
+      <div class="note">Crypto deposits: no MuB-set daily cap is intended, but provider limits, network limits, verification, fraud controls and applicable laws may apply.</div>
+    </div>
+    <div class="section">
+      <div class="label">WHAT MUST BE CONNECTED BEFORE LAUNCH</div>
+      <div class="note">Approved payment provider(s), secure server-side payment verification, deposit ledger and reconciliation, refund/withdrawal handling, account security, and required legal/compliance review.</div>
+    </div>
+    <div class="note section">This panel is a requirements preview only, not a payment form or promise that any payment method is available. MuB has no broker/exchange account connection or live-order authorization. Continue using Demo Account for paper trading.</div>
   </div>
 
   <div class="panel section" id="marketSelectorPanel">
@@ -626,7 +637,13 @@ $("refreshDemoButton")?.addEventListener("click", async () => {
   } finally { button.disabled=false; button.textContent="↻"; }
 });
 $("depositInfoButton")?.addEventListener("click", () => {
-  alert("Deposits are not enabled in MuB. This is a paper-trading demo; no real funds can be deposited or withdrawn here.");
+  const panel = $("realAccountLockedPanel");
+  if (panel) {
+    setAccountMode("REAL");
+    panel.hidden = false;
+    panel.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  alert("Real deposits are not enabled yet. The Real Account panel shows MuB's planned funding requirements. Do not send funds; payment processing and verification are not connected.");
 });
 $("addMarketButton")?.addEventListener("click", () => {
   $("marketSelectorPanel").scrollIntoView({behavior:"smooth",block:"start"});
