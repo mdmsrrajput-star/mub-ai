@@ -1947,9 +1947,14 @@ async function continuousAutoStep(){
     if(!response.ok) throw new Error("Multi-asset scan unavailable; no trade opened.");
     const scan=await response.json();
     if(scan.mode!=="PAPER_ONLY"||scan.liveTradingEnabled!==false||scan.executionEnabled!==false) throw new Error("Scanner safety check failed.");
-    const candidate=(scan.results||[]).find(x=>x.eligible&&x.executionSupported&&["BUY","SELL"].includes(x.signal)&&["1m","5m","10m","15m"].includes(x.timeframe)&&["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","XAUUSD","XAGUSD"].includes(x.symbol));
+    const scanResults=Array.isArray(scan.results)?scan.results:[];
+    const candidate=scanResults.find(x=>x.eligible&&x.executionSupported&&["BUY","SELL"].includes(x.signal)&&["1m","5m","10m","15m"].includes(x.timeframe)&&["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","XAUUSD","XAGUSD"].includes(x.symbol));
     if(!candidate){
-      setContinuousAutoStatus("Auto scan checked "+Number(scan.scanned||0)+" crypto/timeframe combinations; no strict qualifying signal. Waiting.");
+      const unavailable=scanResults.filter(x=>x.signal==="UNAVAILABLE").length;
+      const waits=scanResults.filter(x=>!x.eligible&&x.signal==="WAIT").length;
+      const directional=scanResults.filter(x=>!x.eligible&&["BUY","SELL"].includes(x.signal)).length;
+      const topReasons=[...new Set(scanResults.filter(x=>!x.eligible&&x.reason).map(x=>String(x.reason).split(";")[0].trim()).filter(Boolean))].slice(0,2);
+      setContinuousAutoStatus("SCAN COMPLETE · "+Number(scan.scanned||scanResults.length)+" combinations · qualified 0 · WAIT "+waits+" · rejected directional "+directional+" · unavailable "+unavailable+". "+(topReasons.join(" / ")||"No fresh qualifying signal")+". No trade submitted; paper-only.");
       return;
     }
     const generated=Date.parse(candidate.generatedAt);
@@ -1965,7 +1970,12 @@ async function continuousAutoStep(){
     paperExpiry=candidate.timeframe;
     try {
       const started=await startPaperPrediction({direction,source:"AUTO",timeframe:candidate.timeframe,autoZoneKey:String(candidate.candleTime||generated)});
-      if(started) setContinuousAutoStatus("AUTO paper entry · "+direction+" "+candidate.symbol+" · analysis "+candidate.timeframe+" · agreement "+candidate.agreementPercent+"% (not win probability) · stake "+formatUsd(paperAmount)+".");
+      if(started) {
+        setContinuousAutoStatus("PAPER TRADE SUBMITTED · "+candidate.symbol+" · "+direction+" · expiry "+candidate.timeframe+" · rule agreement "+candidate.agreementPercent+"% (not win probability) · stake "+formatUsd(paperAmount)+".");
+      } else {
+        const detail=$("predictionStatus")?.textContent||"Paper prediction request was not accepted";
+        setContinuousAutoStatus("ENTRY FAILED · "+candidate.symbol+" "+direction+" "+candidate.timeframe+" · "+detail+" · no real order placed.");
+      }
     } finally {
       symbol=previousSymbol;
       paperExpiry=previousExpiry;
