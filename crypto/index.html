@@ -344,6 +344,7 @@ footer{padding:14px 10px}
       <button type="button" class="expiryButton active" data-expiry="1m">1 MIN</button>
       <button type="button" class="expiryButton" data-expiry="3m">3 MIN</button>
       <button type="button" class="expiryButton" data-expiry="5m">5 MIN</button>
+      <button type="button" class="expiryButton" data-expiry="10m">10 MIN</button>
       <button type="button" class="expiryButton" data-expiry="15m">15 MIN</button>
       <button type="button" class="expiryButton" data-expiry="30m">30 MIN</button>
       <button type="button" class="expiryButton" data-expiry="1h">1 HOUR</button>
@@ -478,6 +479,7 @@ footer{padding:14px 10px}
       <button data-tf="1m">1m</button>
       <button data-tf="3m">3m</button>
       <button data-tf="5m" class="active">5m</button>
+      <button data-tf="10m">10m</button>
       <button data-tf="15m">15m</button>
       <button data-tf="30m">30m</button>
       <button data-tf="1h">1h</button>
@@ -519,7 +521,7 @@ footer{padding:14px 10px}
     <div class="panel">
       <div class="label">Signal API status</div>
       <div class="value" id="signalConnection">CONNECTING</div>
-      <div class="note">Refresh cadence follows the selected chart: 15s for 5s–1m charts, 30s for 3m–5m, 60s for longer charts. Signals use completed candles only.</div>
+      <div class="note">Refresh cadence follows the selected chart: 15s for 5s–1m charts, 30s for 5m–10m, 60s for longer charts. Signals use completed candles only.</div>
     </div>
     <div class="panel">
       <div class="label">Order execution</div>
