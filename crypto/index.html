@@ -1771,6 +1771,8 @@ async function startPaperPrediction(options = {}) {
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
         action:"start", symbol, direction:tradeDirection, expiry:paperExpiry, amount:paperAmount,
+        source: options.source === "AUTO" ? "AUTO" : "MANUAL",
+        timeframe: options.timeframe || paperExpiry,
         ...(options.autoZoneKey ? {
           idempotencyKey: ["auto", symbol, options.autoZoneKey, paperExpiry].join("|")
         } : {})
@@ -1869,23 +1871,34 @@ async function continuousAutoStep(){
       return;
     }
     if(continuousBatch.length>=5) return;
-    if(!["BTCUSDT","ETHUSDT"].includes(symbol)){
-      setContinuousAutoStatus("Paused: continuous auto currently supports BTC/USDT and ETH/USDT only. Select one of them.");
+    const response=await fetch("/api/auto-scan?_="+Date.now(),{cache:"no-store"});
+    if(!response.ok) throw new Error("Multi-asset scan unavailable; no trade opened.");
+    const scan=await response.json();
+    if(scan.mode!=="PAPER_ONLY"||scan.liveTradingEnabled!==false||scan.executionEnabled!==false) throw new Error("Scanner safety check failed.");
+    const candidate=(scan.results||[]).find(x=>x.eligible&&["BUY","SELL"].includes(x.signal)&&["1m","5m","10m","15m"].includes(x.timeframe)&&["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT"].includes(x.symbol));
+    if(!candidate){
+      setContinuousAutoStatus("Auto scan checked "+Number(scan.scanned||0)+" crypto/timeframe combinations; no strict qualifying signal. Waiting.");
       return;
     }
-    const tf=selectedAnalysisTimeframe();
-    const response=await fetch("/api/crypto-signal?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf)+"&_="+Date.now(),{cache:"no-store"});
-    if(!response.ok) throw new Error("Fresh signal unavailable; no trade opened.");
-    const signal=await response.json();
-    const generated=Date.parse(signal.generatedAt);
+    const generated=Date.parse(candidate.generatedAt);
     const age=Date.now()-generated;
-    if(!Number.isFinite(age)||age<0||age>90000||!Number.isFinite(Number(signal.score))||Number(signal.score)<70||!["BUY","SELL"].includes(signal.signal)){
-      setContinuousAutoStatus("Auto loop active · no entry: signal is stale, below 70/100, or WAIT. Will recheck shortly.");
+    if(!Number.isFinite(age)||age<0||age>90000){
+      setContinuousAutoStatus("Auto scan found a stale candidate; waiting for fresh completed candles.");
       return;
     }
-    const direction=signal.signal==="BUY"?"UP":"DOWN";
-    const started=await startPaperPrediction({direction});
-    if(started) setContinuousAutoStatus("Auto loop active · opened "+direction+" "+symbol+" · score "+signal.score+"/100 · stake "+formatUsd(paperAmount)+" · "+continuousBatch.length+"/5 batch trades settled.");
+    const direction=candidate.signal==="BUY"?"UP":"DOWN";
+    const previousSymbol=symbol;
+    const previousExpiry=paperExpiry;
+    symbol=candidate.symbol;
+    paperExpiry=candidate.timeframe;
+    try {
+      const started=await startPaperPrediction({direction,source:"AUTO",timeframe:candidate.timeframe,autoZoneKey:String(candidate.candleTime||generated)});
+      if(started) setContinuousAutoStatus("AUTO paper entry · "+direction+" "+candidate.symbol+" · analysis "+candidate.timeframe+" · agreement "+candidate.agreementPercent+"% (not win probability) · stake "+formatUsd(paperAmount)+".");
+    } finally {
+      symbol=previousSymbol;
+      paperExpiry=previousExpiry;
+      document.querySelectorAll(".expiryButton").forEach(b=>b.classList.toggle("active",b.dataset.expiry===paperExpiry));
+    }
   } catch(e) {
     setContinuousAutoStatus("Auto loop paused safely: "+(e.message||"request failed")+". No real order was placed.");
   } finally { continuousAutoBusy=false; }
