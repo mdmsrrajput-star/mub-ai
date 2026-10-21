@@ -287,6 +287,11 @@ footer{padding:14px 10px}
         <button type="button" id="tournamentPlayButton" class="active">SUBMIT DEMO PREDICTION</button>
         <button type="button" id="tournamentRefreshButton">REFRESH SCORE</button>
       </div>
+      <div class="controls section" role="group" aria-label="Tournament automatic paper predictions">
+        <button type="button" id="tournamentAutoStart" style="flex:1;background:#245e4d;color:#fff">START AUTO</button>
+        <button type="button" id="tournamentAutoStop" style="flex:1;background:#7c2d3a;color:#fff" disabled>STOP AUTO</button>
+      </div>
+      <div class="note" id="tournamentAutoStatus" aria-live="polite">Tournament auto mode is stopped. Start it while the session is open to check fresh signals every 30 seconds. Requires sign-in and joining today's tournament.</div>
       <div class="note" id="tournamentPlayMessage" aria-live="polite">Join the daily tournament before making predictions. No deposits or real trades.</div>
     </div>
     <div class="panel section">
@@ -2302,6 +2307,66 @@ tournamentEl("tournamentRefreshButton").addEventListener("click", async () => {
   } finally { button.disabled=false; button.textContent=previous; }
 });
 
+/* Tournament auto mode submits paper-only tournament predictions when eligible. */
+let tournamentAutoTimer = null;
+let tournamentAutoBusy = false;
+function stopTournamentAuto(message = "Tournament auto mode stopped.") {
+  if (tournamentAutoTimer) clearInterval(tournamentAutoTimer);
+  tournamentAutoTimer = null;
+  tournamentAutoBusy = false;
+  $("tournamentAutoStart").disabled = false;
+  $("tournamentAutoStop").disabled = true;
+  $("tournamentAutoStatus").textContent = message;
+}
+async function tournamentAutoTick() {
+  if (tournamentAutoBusy || !tournamentAutoTimer) return;
+  if (!tournamentSignedIn || $("tournamentPanel").hidden) {
+    stopTournamentAuto("Auto stopped: open Tournament and sign in first.");
+    return;
+  }
+  if ($("tournamentSessionStatus").textContent !== "SESSION OPEN") {
+    stopTournamentAuto("Auto stopped: tournament session is closed.");
+    return;
+  }
+  if ($("tournamentJoinButton").textContent !== "JOINED TODAY ✓") {
+    stopTournamentAuto("Auto stopped: tap JOIN TODAY first.");
+    return;
+  }
+  const stake = Number($("tournamentStake").value);
+  if (!Number.isInteger(stake) || stake < 1 || stake > 20) {
+    stopTournamentAuto("Auto stopped: choose a stake between 1 and 20 T coins.");
+    return;
+  }
+  tournamentAutoBusy = true;
+  try {
+    const me = await tournamentRequest("me", {}, "GET");
+    tournamentShowSignedIn(me.user);
+    if (!me.session?.open) {
+      stopTournamentAuto("Auto stopped: tournament session is closed.");
+      return;
+    }
+    if (!me.user.joined || me.user.day !== me.session.day) {
+      stopTournamentAuto("Auto stopped: join today's tournament first.");
+      return;
+    }
+    if (Number(me.user.coins) < stake) {
+      stopTournamentAuto("Auto stopped: not enough tournament coins for the selected stake.");
+      return;
+    }
+    if (Number(me.user.pending) >= 3) {
+      $("tournamentAutoStatus").textContent = "Waiting: maximum 3 unsettled predictions. Auto will check again shortly.";
+      return;
+    }
+    $("tournamentAutoStatus").textContent = "Checking fresh " + (tournamentExpirySeconds === 300 ? "5-minute" : "1-minute") + " signal…";
+    // Reuse the existing validated signal + paper-only submit path.
+    if (!$("tournamentPlayButton").disabled) $("tournamentPlayButton").click();
+  } catch (error) {
+    $("tournamentAutoStatus").textContent = "Auto check failed: " + error.message;
+  } finally {
+    tournamentAutoBusy = false;
+  }
+}
+
 /* Unified account selector: each account has its own balance and trade controls. */
 let tournamentExecutionMode = "MANUAL";
 function setUnifiedAccount(mode) {
@@ -2354,8 +2419,41 @@ $("tournamentAutoMode")?.addEventListener("click",()=>{
   tournamentExecutionMode="AUTO";
   $("tournamentAutoMode").classList.add("active");
   $("tournamentManualMode").classList.remove("active");
-  $("tournamentAutoGuidance").textContent="Auto signal is armed for the next button press: MuB checks a fresh signal and requires score ≥70/100. It will not continuously spend tournament coins in the background.";
+  $("tournamentAutoGuidance").textContent="Auto mode checks fresh BTC/ETH signals and only submits a tournament prediction when the score is at least 70/100. It remains paper-only.";
 });
+$("tournamentManualMode")?.addEventListener("click",()=>{
+  tournamentExecutionMode="MANUAL";
+  $("tournamentManualMode").classList.add("active");
+  $("tournamentAutoMode").classList.remove("active");
+  stopTournamentAuto("Tournament auto mode stopped. Manual mode selected.");
+  $("tournamentAutoGuidance").textContent="Manual mode uses your selected tournament asset, direction, expiry and T-coin stake.";
+});
+$("tournamentAutoStart")?.addEventListener("click",()=>{
+  if (tournamentExecutionMode !== "AUTO") {
+    tournamentExecutionMode="AUTO";
+    $("tournamentAutoMode").classList.add("active");
+    $("tournamentManualMode").classList.remove("active");
+  }
+  if (!tournamentSignedIn) {
+    $("tournamentAutoStatus").textContent="Sign in first, then join today's tournament.";
+    return;
+  }
+  if ($("tournamentSessionStatus").textContent !== "SESSION OPEN") {
+    $("tournamentAutoStatus").textContent="Tournament session is closed. Auto is available during the live session only.";
+    return;
+  }
+  if ($("tournamentJoinButton").textContent !== "JOINED TODAY ✓") {
+    $("tournamentAutoStatus").textContent="Tap JOIN TODAY before starting tournament auto.";
+    return;
+  }
+  if (tournamentAutoTimer) return;
+  $("tournamentAutoStart").disabled=true;
+  $("tournamentAutoStop").disabled=false;
+  $("tournamentAutoStatus").textContent="Tournament auto is ON · checking for fresh signals every 30 seconds. Keep this page open.";
+  tournamentAutoTimer=setInterval(tournamentAutoTick,30000);
+  tournamentAutoTick();
+});
+$("tournamentAutoStop")?.addEventListener("click",()=>stopTournamentAuto("Tournament auto mode stopped by you."));
 
 tournamentUpdateAuthMode("register");
 if (new URLSearchParams(window.location.search).has("tournamentReset")) { tournamentEl("tournamentResetPanel").hidden=false; tournamentEl("tournamentForgotPanel").hidden=true; }
