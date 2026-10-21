@@ -328,6 +328,8 @@ export default async function handler(req, res) {
     });
   }
 
+  let actionForDiagnostics = "unknown";
+
   try {
     let body = req.body;
 
@@ -343,6 +345,7 @@ export default async function handler(req, res) {
     }
 
     const action = body.action;
+    actionForDiagnostics = typeof action === "string" ? action : "unknown";
 
     if (action === "manage") {
       const account = await runLedger("status");
@@ -434,15 +437,37 @@ export default async function handler(req, res) {
       account
     });
   } catch (error) {
-    console.error("Paper account POST failed:", error.message);
-
-    const message = error.message || "Unknown server error";
+    const message = String(error?.message || "Unknown server error");
     const clientError =
       /Unsupported symbol|valid price|positive|already open|Insufficient|No open position|Side must|Unsupported action|Daily realized loss limit|Position notional exceeds|stopLoss|takeProfit|For LONG|For SHORT/i.test(message);
 
+    let diagnosticCode = "PAPER_ACCOUNT_UNKNOWN";
+    if (/Missing Upstash environment variables/i.test(message)) {
+      diagnosticCode = "PAPER_DB_CONFIG_MISSING";
+    } else if (/Redis request failed|fetch failed|timeout|ENOTFOUND|ECONNRESET|ECONNREFUSED/i.test(message)) {
+      diagnosticCode = "PAPER_DB_CONNECTION_FAILED";
+    } else if (/Unexpected response from paper account database|JSON|cjson|Lua|script/i.test(message)) {
+      diagnosticCode = "PAPER_LEDGER_DATA_OR_SCRIPT_ERROR";
+    } else if (/Could not retrieve the public market price|Invalid market price/i.test(message)) {
+      diagnosticCode = "PAPER_PRICE_PROVIDER_FAILED";
+    } else if (clientError) {
+      diagnosticCode = "PAPER_REQUEST_REJECTED";
+    }
+
+    // Keep the detailed exception in server logs only; never return credentials or raw database payloads.
+    console.error("Paper account POST diagnostic:", JSON.stringify({
+      diagnosticCode,
+      action: actionForDiagnostics,
+      message
+    }));
+
     return send(res, clientError ? 400 : 500, {
       ok: false,
-      error: clientError ? message : "Paper account operation failed. Check Vercel function logs."
+      error: clientError
+        ? message
+        : "Paper account operation failed (" + diagnosticCode + "). Check Vercel function logs.",
+      diagnosticCode,
+      action: actionForDiagnostics
     });
   }
 }
