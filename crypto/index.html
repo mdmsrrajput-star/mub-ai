@@ -1843,6 +1843,7 @@ predictionPollHandle = setInterval(refreshPredictionAccount, 2500);
 /* Continuous auto loop: paper predictions only; never invokes live execution. */
 let continuousAutoRunning=false;
 let continuousAutoBusy=false;
+let continuousLastScanAt=0;
 let continuousBatch=[];
 let continuousSeenSettled=new Set();
 let continuousStartingBalance=10000;
@@ -1905,6 +1906,12 @@ async function continuousAutoStep(){
       return;
     }
     if(continuousBatch.length>=5) return;
+    const scanWait=300000-(Date.now()-continuousLastScanAt);
+    if(continuousLastScanAt && scanWait>0){
+      setContinuousAutoStatus("Auto mode active · next market scan in "+Math.ceil(scanWait/1000)+"s. Scans are spaced 5 minutes apart to limit provider requests.");
+      return;
+    }
+    continuousLastScanAt=Date.now();
     const response=await fetch("/api/auto-scan?_="+Date.now(),{cache:"no-store"});
     if(!response.ok) throw new Error("Multi-asset scan unavailable; no trade opened.");
     const scan=await response.json();
@@ -1945,7 +1952,7 @@ $("continuousAutoStart")?.addEventListener("click",async()=>{
   if(!snapshot){setContinuousAutoStatus("Cannot start: paper account unavailable.");return;}
   continuousStartingBalance=Number(snapshot.balance??10000);
   continuousBatch=[]; continuousSeenSettled=new Set((snapshot.history||[]).filter(t=>t&&t.id).map(t=>String(t.id)));
-  continuousConsecutiveLosses=0; continuousBatchNumber=0; continuousAutoRunning=true;
+  continuousConsecutiveLosses=0; continuousBatchNumber=0; continuousLastScanAt=0; continuousAutoRunning=true;
   paperExecutionMode="AUTO"; updatePaperTradeControls();
   $("continuousAutoStart").disabled=true; $("continuousAutoStop").disabled=false;
   $("continuousAutoStart").textContent="AUTO RUNNING";
