@@ -1932,6 +1932,7 @@ async function continuousAutoStep(){
       symbol=previousSymbol;
       paperExpiry=previousExpiry;
       document.querySelectorAll(".expiryButton").forEach(b=>b.classList.toggle("active",b.dataset.expiry===paperExpiry));
+      await refreshPredictionAccount().catch(()=>{});
     }
   } catch(e) {
     setContinuousAutoStatus("Auto loop paused safely: "+(e.message||"request failed")+". No real order was placed.");
