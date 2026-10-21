@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   const forexSymbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"];
   const metalsWithSignalFeed = ["XAUUSD", "XAGUSD"];
   const cryptoTimeframes = ["1m", "5m", "10m", "15m"];
-  const providerTimeframes = ["1m", "5m", "15m"];
+  const providerTimeframes = ["1m", "5m", "10m", "15m"];
   const results = [];
   const concurrency = 12;
   const queue = [
