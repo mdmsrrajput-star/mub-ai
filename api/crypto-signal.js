@@ -21,8 +21,8 @@ export default async function handler(req, res) {
   const requestedTimeframe = String(req.query?.timeframe || "5m");
   const timeframeMap = {
     "1m": { interval: "1m", seconds: 60, trend: "15m", trendSeconds: 900 },
-    "3m": { interval: "3m", seconds: 180, trend: "15m", trendSeconds: 900 },
     "5m": { interval: "5m", seconds: 300, trend: "15m", trendSeconds: 900 },
+    "10m": { interval: "10m", seconds: 600, trend: "15m", trendSeconds: 900 },
     "15m": { interval: "15m", seconds: 900, trend: "1h", trendSeconds: 3600 },
     "30m": { interval: "30m", seconds: 1800, trend: "2h", trendSeconds: 7200 },
     "1h": { interval: "1h", seconds: 3600, trend: "4h", trendSeconds: 14400 },
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     "1w": { interval: "1w", seconds: 604800, trend: "1M", trendSeconds: 2592000 }
   };
   const tf = timeframeMap[requestedTimeframe];
-  if (!tf) return res.status(400).json({ error: "Unsupported signal timeframe. Use 1m, 3m, 5m, 15m, 30m, 1h, 4h, 1d, or 1w." });
+  if (!tf) return res.status(400).json({ error: "Unsupported signal timeframe. Use 1m, 5m, 10m, 15m, 30m, 1h, 4h, 1d, or 1w." });
 
   const emaSeries = (values, period) => {
     const alpha = 2 / (period + 1);
@@ -101,14 +101,20 @@ export default async function handler(req, res) {
   };
 
   async function fetchCandles(interval, durationSeconds, limit) {
+    // Binance has no native 10m interval. Build UTC-aligned 10m candles
+    // from completed 1m candles instead of substituting another timeframe.
+    const sourceInterval = interval === "10m" ? "1m" : interval;
+    const sourceSeconds = interval === "10m" ? 60 : durationSeconds;
+    const sourceLimit = interval === "10m" ? Math.min(1000, limit * 10 + 20) : limit;
     const url =
       "https://data-api.binance.vision/api/v3/klines" +
       "?symbol=" + encodeURIComponent(symbol) +
-      "&interval=" + interval +
-      "&limit=" + limit;
+      "&interval=" + sourceInterval +
+      "&limit=" + sourceLimit;
 
     const response = await fetch(url, {
-      cache: "no-store"
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000)
     });
 
     if (!response.ok) {
@@ -123,10 +129,10 @@ export default async function handler(req, res) {
 
     const now = Math.floor(Date.now() / 1000);
 
-    return rows
-      // Exclude the currently forming candle.
+    const sourceCandles = rows
+      // Exclude the currently forming source candle.
       .filter(k =>
-        Math.floor(Number(k[0]) / 1000) + durationSeconds <= now
+        Math.floor(Number(k[0]) / 1000) + sourceSeconds <= now
       )
       .map(k => ({
         time: Math.floor(Number(k[0]) / 1000),
@@ -136,6 +142,29 @@ export default async function handler(req, res) {
         close: Number(k[4]),
         volume: Number(k[5])
       }));
+
+    if (interval !== "10m") return sourceCandles;
+
+    const buckets = new Map();
+    for (const candle of sourceCandles) {
+      const bucketTime = Math.floor(candle.time / 600) * 600;
+      const bucket = buckets.get(bucketTime);
+      if (!bucket) {
+        buckets.set(bucketTime, {
+          time: bucketTime, open: candle.open, high: candle.high,
+          low: candle.low, close: candle.close, volume: candle.volume, count: 1
+        });
+      } else {
+        bucket.high = Math.max(bucket.high, candle.high);
+        bucket.low = Math.min(bucket.low, candle.low);
+        bucket.close = candle.close;
+        bucket.volume += candle.volume;
+        bucket.count++;
+      }
+    }
+    return [...buckets.values()]
+      .filter(c => c.count === 10 && c.time + 600 <= now)
+      .map(({count, ...c}) => c);
   }
 
   try {
