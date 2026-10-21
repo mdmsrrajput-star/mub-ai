@@ -21,6 +21,7 @@ jobs:
         env:
           MUB_BASE_URL: ${{ secrets.MUB_BASE_URL }}
           PAPER_WRITE_KEY: ${{ secrets.PAPER_WRITE_KEY }}
+          MUB_SCHEDULED_ENTRIES_ENABLED: ${{ secrets.MUB_SCHEDULED_ENTRIES_ENABLED }}
         run: |
           node <<'NODE'
           const base = (process.env.MUB_BASE_URL || "").replace(/\/$/, "");
@@ -60,6 +61,13 @@ jobs:
             console.log("Position management completed:", JSON.stringify((managed.checked || []).map(x => ({
               symbol: x.symbol, closed: x.closed, reason: x.reason || null
             }))));
+
+            // The dashboard Auto button controls its own multi-asset prediction loop.
+            // Do not let this separate cron silently open positions unless explicitly enabled.
+            if (process.env.MUB_SCHEDULED_ENTRIES_ENABLED !== "true") {
+              console.log("Scheduled spot entries disabled; existing positions were managed. Use the dashboard Auto control for paper predictions.");
+              return;
+            }
 
             for (const symbol of ["BTCUSDT", "ETHUSDT"]) {
               const signal = await request("/api/crypto-signal?symbol=" + symbol);
