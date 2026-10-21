@@ -521,6 +521,18 @@ footer{padding:14px 10px}
       <div class="label">Signal explanation</div>
       <div class="note" id="signalReasons">Waiting for analysis...</div>
     </div>
+    <div class="panel" id="candleLearningPanel">
+      <div class="label">CANDLE LEARNING & PAPER PERFORMANCE</div>
+      <div class="value" id="candleLearningPattern">Waiting for candle analysis…</div>
+      <div class="note" id="candleLearningStats">Pattern samples and observed accuracy will appear after a successful signal calculation.</div>
+      <div class="kpi-strip">
+        <div class="kpi"><div class="label">SETTLED WIN RATE</div><strong id="learningOverallWinRate">—</strong></div>
+        <div class="kpi"><div class="label">AUTO WIN RATE</div><strong id="learningAutoWinRate">—</strong></div>
+        <div class="kpi"><div class="label">MANUAL WIN RATE</div><strong id="learningManualWinRate">—</strong></div>
+        <div class="kpi"><div class="label">SETTLED TRADES</div><strong id="learningSettledCount">—</strong></div>
+      </div>
+      <div class="note" id="learningPerformanceNote" style="margin-top:8px">Historical results describe past paper predictions, not future win probability. Candle pattern outcomes are measured separately from settled trades.</div>
+    </div>
     <div class="panel">
       <div class="label">Signal API status</div>
       <div class="value" id="signalConnection">CONNECTING</div>
@@ -1331,6 +1343,7 @@ async function refreshSignal() {
       " · ATR14: "+Number(i.atr14).toFixed(2);
 
     $("signalReasons").textContent=(data.reasons||[]).join(" · ");
+    renderCandleLearning(data);
     renderOrderBlocks(data, requestedSymbol);
     await maybeAutoTradeZone(data, requestedSymbol, requestedSignalTimeframe);
     setStatus("signalConnection", ageSeconds > 120 ? "STALE DATA" : "CONNECTED", ageSeconds <= 120);
@@ -1659,6 +1672,21 @@ function syncPredictionChartMarkers(account) {
   try { candleSeries.setMarkers(markers); } catch (_) {}
 }
 
+function formatLearningWinRate(trades) {
+  const settled = (Array.isArray(trades) ? trades : []).filter(t => ["WIN","LOSS"].includes(t && t.result));
+  if (!settled.length) return { text: "—", wins: 0, total: 0, percent: null };
+  const wins = settled.filter(t => t.result === "WIN").length;
+  return { text: Math.round(wins / settled.length * 100) + "%", wins, total: settled.length, percent: wins / settled.length * 100 };
+}
+function renderCandleLearning(data) {
+  if (!data || !data.candleLearning) return;
+  const learn = data.candleLearning;
+  $("candleLearningPattern").textContent = (learn.pattern || "NO_CLEAR_PATTERN") + " · " + (learn.patternDirection || "NEUTRAL");
+  $("candleLearningStats").textContent =
+    "3-candle outcome window · " + Number(learn.samples || 0) + " historical matches · " +
+    (learn.accuracyPercent === null || learn.accuracyPercent === undefined ? "accuracy not available" : Number(learn.accuracyPercent) + "% observed directional accuracy") +
+    " · " + (learn.appliedAsFilter ? "Used as a filter for this signal." : "Not used as a decisive filter for this signal.");
+}
 function renderPredictionAccount(data) {
   const account = data && data.account ? data.account : {};
   syncPredictionChartMarkers(account);
@@ -1711,6 +1739,16 @@ function renderPredictionAccount(data) {
     $("predictionStatus").textContent = "Ready · paper-only · 100% profit payout on a correct prediction; stake lost on an incorrect prediction.";
   }
   const history = Array.isArray(account.history) ? account.history : [];
+  const overallStats = formatLearningWinRate(history);
+  const autoStats = formatLearningWinRate(history.filter(t => t.source === "AUTO"));
+  const manualStats = formatLearningWinRate(history.filter(t => t.source !== "AUTO"));
+  $("learningOverallWinRate").textContent = overallStats.text;
+  $("learningAutoWinRate").textContent = autoStats.text;
+  $("learningManualWinRate").textContent = manualStats.text;
+  $("learningSettledCount").textContent = String(overallStats.total);
+  $("learningPerformanceNote").textContent = overallStats.total
+    ? "Based on " + overallStats.total + " settled paper predictions in saved history (" + overallStats.wins + " wins). AUTO: " + autoStats.wins + "/" + autoStats.total + " wins; MANUAL: " + manualStats.wins + "/" + manualStats.total + " wins. These are descriptive historical results, not forecasts."
+    : "No settled predictions available yet. Historical results will appear after paper predictions settle; they are not future win probabilities.";
   $("predictionHistory").textContent = history.length
     ? history.length + " settled prediction(s) saved."
     : "No settled predictions yet.";
