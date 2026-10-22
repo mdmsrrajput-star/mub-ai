@@ -1689,11 +1689,37 @@ function syncPredictionChartMarkers(account) {
   try { candleSeries.setMarkers(markers); } catch (_) {}
 }
 
+function normalizeSettledPredictions(trades) {
+  const source = Array.isArray(trades) ? trades : [];
+  const settled = [];
+  const seenIds = new Set();
+  for (const trade of source) {
+    if (!trade || typeof trade !== "object") continue;
+    const result = String(trade.result || "").trim().toUpperCase();
+    if (result !== "WIN" && result !== "LOSS") continue;
+    const id = trade.id == null ? "" : String(trade.id);
+    if (id && seenIds.has(id)) continue;
+    if (id) seenIds.add(id);
+    settled.push({
+      ...trade,
+      result,
+      source: String(trade.source || "MANUAL").trim().toUpperCase() === "AUTO" ? "AUTO" : "MANUAL"
+    });
+  }
+  // Newest settled trades first, without mutating the server-provided history.
+  settled.sort((a, b) => Number(b.settledAt || 0) - Number(a.settledAt || 0));
+  return settled;
+}
 function formatLearningWinRate(trades) {
-  const settled = (Array.isArray(trades) ? trades : []).filter(t => ["WIN","LOSS"].includes(t && t.result));
-  if (!settled.length) return { text: "—", wins: 0, total: 0, percent: null };
+  const settled = normalizeSettledPredictions(trades);
+  const total = settled.length;
   const wins = settled.filter(t => t.result === "WIN").length;
-  return { text: Math.round(wins / settled.length * 100) + "%", wins, total: settled.length, percent: wins / settled.length * 100 };
+  const losses = total - wins;
+  const percent = total ? wins / total * 100 : null;
+  return {
+    text: percent === null ? "—" : percent.toFixed(1) + "%",
+    wins, losses, total, percent, settled
+  };
 }
 function renderCandleLearning(data) {
   if (!data || !data.candleLearning) return;
@@ -1755,27 +1781,28 @@ function renderPredictionAccount(data) {
   } else {
     $("predictionStatus").textContent = "Ready · paper-only · 100% profit payout on a correct prediction; stake lost on an incorrect prediction.";
   }
-  const history = Array.isArray(account.history) ? account.history : [];
-  const overallStats = formatLearningWinRate(history);
+  const rawHistory = Array.isArray(account.history) ? account.history : [];
+  const overallStats = formatLearningWinRate(rawHistory);
+  const history = overallStats.settled;
   const autoStats = formatLearningWinRate(history.filter(t => t.source === "AUTO"));
-  const manualStats = formatLearningWinRate(history.filter(t => t.source !== "AUTO"));
+  const manualStats = formatLearningWinRate(history.filter(t => t.source === "MANUAL"));
   $("learningOverallWinRate").textContent = overallStats.text;
   $("learningAutoWinRate").textContent = autoStats.text;
   $("learningManualWinRate").textContent = manualStats.text;
   $("learningSettledCount").textContent = String(overallStats.total);
   $("learningPerformanceNote").textContent = overallStats.total
-    ? "Based on " + overallStats.total + " settled paper predictions in saved history (" + overallStats.wins + " wins). AUTO: " + autoStats.wins + "/" + autoStats.total + " wins; MANUAL: " + manualStats.wins + "/" + manualStats.total + " wins. These are descriptive historical results, not forecasts."
-    : "No settled predictions available yet. Historical results will appear after paper predictions settle; they are not future win probabilities.";
+    ? "Verified from " + overallStats.total + " unique settled paper predictions: " + overallStats.wins + " wins, " + overallStats.losses + " losses. AUTO: " + autoStats.wins + " wins / " + autoStats.losses + " losses (" + autoStats.total + " total); MANUAL: " + manualStats.wins + " wins / " + manualStats.losses + " losses (" + manualStats.total + " total). Rates use wins ÷ settled trades and are historical, not forecasts."
+    : "No valid settled predictions available yet. Completed paper predictions will appear here; historical results are not future win probabilities.";
   $("predictionHistory").textContent = history.length
-    ? history.length + " settled prediction(s) saved."
-    : "No settled predictions yet.";
+    ? history.length + " valid settled prediction(s) saved."
+    : "No valid settled predictions yet.";
   $("predictionHistoryCount").textContent = "· " + history.length + " settled";
   const list = $("predictionTradeHistoryList");
   list.replaceChildren();
   if (!history.length) {
     const empty = document.createElement("div");
     empty.className = "note";
-    empty.textContent = "No settled paper predictions yet. Completed predictions will appear here.";
+    empty.textContent = "No valid settled paper predictions yet. Completed predictions will appear here.";
     list.appendChild(empty);
     return;
   }
