@@ -143,22 +143,31 @@ if action == "settle" then
    local exit = tonumber(p.price)
    local direction = a.direction
    local won = (direction == "UP" and exit > entry) or (direction == "DOWN" and exit < entry)
+   local tied = exit == entry
    local stake = tonumber(a.stake)
-   local pnl = won and stake or -stake
-   -- New trades already had their stake deducted at entry. On a win, return
-   -- the stake plus equal profit; on a loss, no further balance deduction.
-   -- Preserve the previous settlement behavior for legacy pending trades.
+   if not stake or stake <= 0 or not entry or entry <= 0 or not exit or exit <= 0 then
+    return redis.error_reply("Invalid entry, exit, or stake; prediction was not settled")
+   end
+   local pnl = won and stake or (tied and 0 or -stake)
+   -- Stake was deducted when the prediction started. A win returns the stake
+   -- plus equal profit; a loss returns nothing; an exact-price tie refunds the
+   -- stake and is recorded as DRAW, not misclassified as a loss.
    if a.stakeDeducted then
-    if won then s.balance = tonumber(s.balance or s.cash or 0) + (stake * 2) end
+    if won then
+     s.balance = tonumber(s.balance or s.cash or 0) + (stake * 2)
+    elseif tied then
+     s.balance = tonumber(s.balance or s.cash or 0) + stake
+    end
     s.cash = s.balance
    else
+    -- Legacy pending predictions did not deduct the stake at entry.
     s.balance = tonumber(s.balance or 10000) + pnl
    end
    s.cash = s.balance
    a.status = "SETTLED"
    a.exitPrice = exit
    a.settledAt = tonumber(p.now)
-   a.result = won and "WIN" or "LOSS"
+   a.result = won and "WIN" or (tied and "DRAW" or "LOSS")
    a.pnl = pnl
    local settled = {}
    for k, v in pairs(a) do settled[k] = v end
