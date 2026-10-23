@@ -1821,22 +1821,52 @@ function syncPredictionChartMarkers(account) {
 function normalizeSettledPredictions(trades) {
   const source = Array.isArray(trades) ? trades : [];
   const settled = [];
-  const seenIds = new Set();
+  const seenKeys = new Set();
   for (const trade of source) {
     if (!trade || typeof trade !== "object") continue;
     const result = String(trade.result || "").trim().toUpperCase();
     if (result !== "WIN" && result !== "LOSS") continue;
-    const id = trade.id == null ? "" : String(trade.id);
-    if (id && seenIds.has(id)) continue;
-    if (id) seenIds.add(id);
+
+    // A trustworthy settled prediction needs a stable identity and a complete,
+    // internally consistent settlement record. Never count an unidentified
+    // record merely because it contains the word WIN or LOSS.
+    const id = trade.id == null ? "" : String(trade.id).trim();
+    const startedAt = Number(trade.startedAt ?? trade.timestamp);
+    const settledAt = Number(trade.settledAt);
+    const entryPrice = Number(trade.entryPrice);
+    const exitPrice = Number(trade.exitPrice);
+    const stake = Number(trade.stake);
+    const pnl = Number(trade.pnl);
+    if (!id || !Number.isFinite(startedAt) || startedAt <= 0 ||
+        !Number.isFinite(settledAt) || settledAt < startedAt ||
+        !Number.isFinite(entryPrice) || entryPrice <= 0 ||
+        !Number.isFinite(exitPrice) || exitPrice <= 0 ||
+        !Number.isFinite(stake) || stake <= 0 ||
+        !Number.isFinite(pnl)) continue;
+
+    // Recompute the result from recorded prices and direction. Equal-price
+    // draws are intentionally excluded from win-rate denominators.
+    const direction = String(trade.direction || "").trim().toUpperCase();
+    if (direction !== "UP" && direction !== "DOWN") continue;
+    const expectedResult = entryPrice === exitPrice
+      ? "DRAW"
+      : ((direction === "UP" && exitPrice > entryPrice) ||
+         (direction === "DOWN" && exitPrice < entryPrice) ? "WIN" : "LOSS");
+    if (expectedResult !== result) continue;
+    const expectedPnl = result === "WIN" ? stake : -stake;
+    if (Math.abs(pnl - expectedPnl) > 0.011) continue;
+
+    if (seenKeys.has(id)) continue;
+    seenKeys.add(id);
     settled.push({
       ...trade,
+      id,
       result,
       source: String(trade.source || "MANUAL").trim().toUpperCase() === "AUTO" ? "AUTO" : "MANUAL"
     });
   }
   // Newest settled trades first, without mutating the server-provided history.
-  settled.sort((a, b) => Number(b.settledAt || 0) - Number(a.settledAt || 0));
+  settled.sort((a, b) => Number(b.settledAt) - Number(a.settledAt));
   return settled;
 }
 function formatLearningWinRate(trades) {
