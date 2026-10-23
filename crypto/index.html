@@ -705,6 +705,17 @@ async function maybeAutoTradeZone(data, expectedSymbol, expectedTimeframe) {
     $("tradeSignalStatus").textContent = "AUTO WAIT · " + expectedTimeframe + " analysis needs a BUY/SELL signal with score ≥70; no prediction started.";
     return;
   }
+  // SMC sequence is a mandatory paper-AUTO gate, not just a dashboard display.
+  // Re-evaluate the latest completed chart candles at entry time; do not trust stale panel text.
+  const smc = analyzeSmcSequence(lastCandlesForAnalytics);
+  const smcDirection = smc.state.includes("BULLISH") ? "BUY" :
+    smc.state.includes("BEARISH") ? "SELL" : "";
+  if (!smc.ready || smcDirection !== signal) {
+    $("tradeSignalStatus").textContent = "AUTO WAIT · SMC gate: " + smc.state +
+      (smcDirection && smcDirection !== signal ? " · signal conflicts with SMC direction" : "") +
+      "; no paper prediction started.";
+    return;
+  }
   const blocks = data && Array.isArray(data.orderBlocks) ? data.orderBlocks : [];
   const valid = blocks.filter(b =>
     Number.isFinite(Number(b.lower)) && Number.isFinite(Number(b.upper)) &&
