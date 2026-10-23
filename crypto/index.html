@@ -908,10 +908,59 @@ function renderSmcSequence(candles,expectedSymbol){
   state.style.color=r.ready?"var(--green)":r.state.includes("BEARISH")?"var(--red)":"var(--blue)";
   $("smcDetails").textContent=r.details;$("smcLevels").textContent=r.levels;
 }
+function candlePatternAt(candles,i) {
+  const x=candles[i],p=candles[i-1];
+  if(!x||!p)return {name:"NO_CLEAR_PATTERN",direction:"NEUTRAL"};
+  const o=Number(x.open),h=Number(x.high),l=Number(x.low),cl=Number(x.close);
+  const po=Number(p.open),pc=Number(p.close),range=Math.max(h-l,1e-12);
+  const body=Math.abs(cl-o),upper=h-Math.max(o,cl),lower=Math.min(o,cl)-l;
+  const bull=cl>o,bear=cl<o;
+  if(bear&&pc>po&&o>=pc&&cl<=po)return {name:"BEARISH_ENGULFING",direction:"DOWN"};
+  if(bull&&pc<po&&o<=pc&&cl>=po)return {name:"BULLISH_ENGULFING",direction:"UP"};
+  if(body/range<=0.1)return {name:"DOJI",direction:"NEUTRAL"};
+  if(lower>=body*2&&upper<=Math.max(body*0.6,range*0.08)&&cl>=l+range*0.55)return {name:"HAMMER",direction:"UP"};
+  if(upper>=body*2&&lower<=Math.max(body*0.6,range*0.08)&&cl<=l+range*0.45)return {name:"SHOOTING_STAR",direction:"DOWN"};
+  if(bull&&body/range>=0.7)return {name:"BULLISH_MARUBOZU",direction:"UP"};
+  if(bear&&body/range>=0.7)return {name:"BEARISH_MARUBOZU",direction:"DOWN"};
+  return {name:"NO_CLEAR_PATTERN",direction:"NEUTRAL"};
+}
+function learnCandleBehavior(candles,expectedSymbol) {
+  if(expectedSymbol!==symbol||!Array.isArray(candles)||candles.length<12)return;
+  // Ignore the newest potentially-forming candle; evaluate the following three completed candles for historical outcomes.
+  const c=candles.slice(0,-1).filter(x=>[x.open,x.high,x.low,x.close].every(v=>Number.isFinite(Number(v))));
+  if(c.length<12)return;
+  const i=c.length-1, current=candlePatternAt(c,i);
+  $("candleLearningPattern").textContent=current.name+" · "+current.direction;
+  if(current.direction==="NEUTRAL"){
+    $("candleLearningStats").textContent="Neutral/unclear pattern. MuB records no directional edge for this candle; more completed candles are needed.";
+    return;
+  }
+  let samples=0,wins=0,up=0,down=0;
+  // Use only past occurrences with a fully observed 3-candle forward outcome. No future bars are used to classify a setup.
+  for(let j=1;j<=c.length-4;j++){
+    const old=candlePatternAt(c,j);
+    if(old.name!==current.name)continue;
+    const entry=Number(c[j].close),future=Number(c[j+3].close);
+    if(!(entry>0)||!Number.isFinite(future))continue;
+    const move=(future-entry)/entry*100;
+    samples++;
+    if(move>0)up++;else if(move<0)down++;
+    if((old.direction==="UP"&&move>0)||(old.direction==="DOWN"&&move<0))wins++;
+  }
+  const accuracy=samples?wins/samples*100:null;
+  const recent=c.slice(-Math.min(30,c.length));
+  const volatility=recent.map(x=>(Number(x.high)-Number(x.low))/Number(x.open)*100).filter(Number.isFinite);
+  const avgRange=volatility.length?volatility.reduce((a,b)=>a+b,0)/volatility.length:0;
+  $("candleLearningStats").textContent="Historical matches: "+samples+" · 3-candle directional follow-through: "+
+    (accuracy===null?"not available":accuracy.toFixed(1)+"% ("+wins+"/"+samples+")")+
+    " · outcomes UP "+up+" / DOWN "+down+" · recent avg candle range "+avgRange.toFixed(3)+"%. "+
+    (samples<8?"Small sample: keep collecting paper data; no learned edge is established.":"Descriptive history only; not a forecast or a trade guarantee.");
+}
 function renderCandleAnalytics(candles, expectedSymbol) {
   if(expectedSymbol !== symbol || !candles.length) return;
   lastCandlesForAnalytics=candles;
   renderSmcSequence(candles,expectedSymbol);
+  learnCandleBehavior(candles,expectedSymbol);
   const last=candles[candles.length-1], recent=candles.slice(-20);
   const change=(last.close-last.open)/last.open*100;
   const high=Math.max(...recent.map(c=>c.high)),low=Math.min(...recent.map(c=>c.low));
