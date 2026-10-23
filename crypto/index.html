@@ -1949,9 +1949,13 @@ function renderPredictionAccount(data) {
   $("learningAutoWinRate").textContent = autoStats.text;
   $("learningManualWinRate").textContent = manualStats.text;
   $("learningSettledCount").textContent = String(overallStats.total);
+  const rawSettledCount = rawHistory.filter(t => t && typeof t === "object" && ["WIN","LOSS"].includes(String(t.result || "").trim().toUpperCase())).length;
+  const excludedCount = Math.max(0, rawSettledCount - overallStats.total);
   $("learningPerformanceNote").textContent = overallStats.total
-    ? "Verified from " + overallStats.total + " unique settled paper predictions: " + overallStats.wins + " wins, " + overallStats.losses + " losses. AUTO: " + autoStats.wins + " wins / " + autoStats.losses + " losses (" + autoStats.total + " total); MANUAL: " + manualStats.wins + " wins / " + manualStats.losses + " losses (" + manualStats.total + " total). Rates use wins ÷ settled trades and are historical, not forecasts."
-    : "No valid settled predictions available yet. Completed paper predictions will appear here; historical results are not future win probabilities.";
+    ? "Verified from " + overallStats.total + " unique settled paper predictions: " + overallStats.wins + " wins, " + overallStats.losses + " losses. " +
+      (excludedCount ? excludedCount + " settled record(s) excluded by validation (missing/duplicate ID or inconsistent settlement fields). " : "All " + rawSettledCount + " WIN/LOSS record(s) passed validation. ") +
+      "AUTO: " + autoStats.wins + " wins / " + autoStats.losses + " losses (" + autoStats.total + " total); MANUAL: " + manualStats.wins + " wins / " + manualStats.losses + " losses (" + manualStats.total + " total). Rates use wins ÷ verified settled trades and are historical, not forecasts."
+    : "No valid settled predictions available yet. " + (excludedCount ? excludedCount + " settled record(s) were excluded by validation. " : "") + "Completed paper predictions will appear here; historical results are not future win probabilities.";
   $("predictionHistory").textContent = history.length
     ? history.length + " valid settled prediction(s) saved."
     : "No valid settled predictions yet.";
