@@ -2099,6 +2099,9 @@ $("demoAccountTab").addEventListener("click", () => setAccountMode("DEMO"));
 $("realAccountTab").addEventListener("click", () => setAccountMode("REAL"));
 
 $("manualModeButton").addEventListener("click", () => {
+  // Selecting Manual must also halt the continuous auto loop; the mode toggle
+  // alone must never leave background auto-entry running.
+  if (continuousAutoRunning) stopContinuousAuto("Auto loop stopped because Manual mode was selected.");
   paperExecutionMode = "MANUAL";
   updatePaperTradeControls();
 });
