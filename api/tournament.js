@@ -80,7 +80,7 @@ async function getMarketPrice(symbol) {
   throw new Error("Tournament predictions currently support BTC/USDT and ETH/USDT only.");
 }
 function publicUser(user) {
-  return { id: user.id, displayName: user.displayName, coins: user.coins, day: user.day, joined: user.joined, pending: (user.pending || []).length, wins: user.wins || 0, losses: user.losses || 0 };
+  return { id: user.id, displayName: user.displayName, coins: user.coins, day: user.day, joined: user.joined, pending: (user.pending || []).length, wins: user.wins || 0, losses: user.losses || 0, draws: user.draws || 0 };
 }
 async function settleDue(user) {
   const pending = Array.isArray(user.pending) ? user.pending : [];
@@ -89,10 +89,20 @@ async function settleDue(user) {
     if (Date.now() < trade.expiresAt) { still.push(trade); continue; }
     try {
       const exit = await getMarketPrice(trade.symbol);
-      const won = (trade.direction === "UP" && exit > trade.entryPrice) || (trade.direction === "DOWN" && exit < trade.entryPrice);
-      if (won) { user.coins += trade.stake * 2; user.wins = (user.wins || 0) + 1; }
-      else user.losses = (user.losses || 0) + 1;
-      user.lastResult = { result: won ? "WIN" : "LOSS", symbol: trade.symbol, direction: trade.direction, stake: trade.stake, entryPrice: trade.entryPrice, exitPrice: exit, settledAt: Date.now() };
+      const tied = exit === Number(trade.entryPrice);
+      const won = !tied && ((trade.direction === "UP" && exit > trade.entryPrice) || (trade.direction === "DOWN" && exit < trade.entryPrice));
+      if (won) {
+        user.coins += trade.stake * 2;
+        user.wins = (user.wins || 0) + 1;
+      } else if (tied) {
+        // The stake was deducted at entry. Return it on an exact-price tie;
+        // a draw must not be counted as either a win or a loss.
+        user.coins += trade.stake;
+        user.draws = (user.draws || 0) + 1;
+      } else {
+        user.losses = (user.losses || 0) + 1;
+      }
+      user.lastResult = { result: won ? "WIN" : (tied ? "DRAW" : "LOSS"), symbol: trade.symbol, direction: trade.direction, stake: trade.stake, entryPrice: trade.entryPrice, exitPrice: exit, settledAt: Date.now() };
     } catch { still.push(trade); }
   }
   user.pending = still;
@@ -183,7 +193,7 @@ export default async function handler(req, res) {
         const salt = crypto.randomBytes(16).toString("base64url");
         const passwordHash = await new Promise((resolve, reject) => crypto.pbkdf2(password, salt, 210000, 32, "sha256", (e, key) => e ? reject(e) : resolve(key.toString("base64url"))));
         const session = londonSession();
-        user = { id, emailHash, displayName, salt, passwordHash, coins: START_COINS, day: session.day, joined: false, pending: [], wins: 0, losses: 0, createdAt: Date.now() };
+        user = { id, emailHash, displayName, salt, passwordHash, coins: START_COINS, day: session.day, joined: false, pending: [], wins: 0, losses: 0, draws: 0, createdAt: Date.now() };
         await redis(["SET", emailKey, id]);
         await saveUser(user);
       } else {
@@ -209,7 +219,7 @@ export default async function handler(req, res) {
     const session = londonSession();
     if (action === "me") {
       if (user.day !== session.day) {
-        user.day = session.day; user.coins = START_COINS; user.joined = false; user.pending = []; user.wins = 0; user.losses = 0;
+        user.day = session.day; user.coins = START_COINS; user.joined = false; user.pending = []; user.wins = 0; user.losses = 0; user.draws = 0;
         await saveUser(user);
       } else {
         await settleDue(user);
@@ -219,7 +229,7 @@ export default async function handler(req, res) {
     }
     if (action === "join") {
       if (!session.open) return json(res, 409, { ok: false, error: "Tournament entry is open only from 08:00 to 16:30 Europe/London." });
-      if (user.day !== session.day) { user.day = session.day; user.coins = START_COINS; user.joined = false; user.pending = []; user.wins = 0; user.losses = 0; }
+      if (user.day !== session.day) { user.day = session.day; user.coins = START_COINS; user.joined = false; user.pending = []; user.wins = 0; user.losses = 0; user.draws = 0; }
       user.joined = true;
       await saveUser(user);
       return json(res, 200, { ok: true, user: publicUser(user), session, message: "You joined today's free tournament with 100 coins." });
