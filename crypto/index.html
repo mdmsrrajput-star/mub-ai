@@ -1875,8 +1875,11 @@ function formatLearningWinRate(trades) {
   const wins = settled.filter(t => t.result === "WIN").length;
   const losses = total - wins;
   const percent = total ? wins / total * 100 : null;
+  // Round explicitly to one decimal place; Number.toFixed can display 57.5
+  // for the mathematically expected 57.6 because of binary floating-point.
+  const roundedPercent = percent === null ? null : Math.round((percent + Number.EPSILON) * 10) / 10;
   return {
-    text: percent === null ? "—" : percent.toFixed(1) + "%",
+    text: roundedPercent === null ? "—" : roundedPercent.toFixed(1) + "%",
     wins, losses, total, percent, settled
   };
 }
