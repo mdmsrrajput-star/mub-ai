@@ -524,6 +524,12 @@ footer{padding:14px 10px}
       <div class="value" id="orderBlockValue">CALCULATING...</div>
       <div class="note" id="orderBlockDetails">Detecting potential bullish and bearish zones from completed candles.</div>
     </div>
+    <div class="panel" id="smcStrategyPanel">
+      <div class="label">SMC SEQUENCE · LIQUIDITY → MSS → DISPLACEMENT → FVG RETEST</div>
+      <div class="value" id="smcState">WAITING FOR CANDLES</div>
+      <div class="note" id="smcDetails">Research-only analysis of completed candles. This panel does not place or authorize trades.</div>
+      <div class="note" id="smcLevels"></div>
+    </div>
     <div class="panel">
       <div class="label">Indicator readings</div>
       <div class="note" id="indicators">Waiting for analysis...</div>
@@ -829,9 +835,72 @@ function renderDepth(data, expectedSymbol) {
   $("depthRows").innerHTML=rows.join("");
   $("kpiSpread").textContent=((asks[0].price-bids[0].price)/bids[0].price*100).toFixed(3)+"%";
 }
+function smcFormatPrice(value) {
+  return Number(value).toLocaleString("en-US",{maximumFractionDigits:8});
+}
+function analyzeSmcSequence(candles) {
+  // Exclude the newest candle because it may still be forming.
+  const c=Array.isArray(candles)?candles.slice(0,-1).filter(x=>
+    [x.open,x.high,x.low,x.close].every(v=>Number.isFinite(Number(v))) &&
+    Number(x.high)>=Number(x.low) && Number(x.low)>0
+  ):[];
+  if(c.length<25)return {state:"WAIT · INSUFFICIENT DATA",details:"Need at least 25 completed candles before evaluating a setup.",levels:"",ready:false};
+  const sample=c.slice(-40), highs=[],lows=[];
+  for(let i=2;i<sample.length-2;i++){
+    if(Number(sample[i].high)>Number(sample[i-1].high)&&Number(sample[i].high)>=Number(sample[i+1].high))highs.push(Number(sample[i].high));
+    if(Number(sample[i].low)<Number(sample[i-1].low)&&Number(sample[i].low)<=Number(sample[i+1].low))lows.push(Number(sample[i].low));
+  }
+  function findEqualLevel(values){
+    for(let i=values.length-1;i>=0;i--)for(let j=i-1;j>=0;j--){
+      const mid=(values[i]+values[j])/2;
+      if(mid>0&&Math.abs(values[i]-values[j])/mid<=0.0015)return mid;
+    }
+    return null;
+  }
+  const eqHigh=findEqualLevel(highs),eqLow=findEqualLevel(lows);
+  let sweep=null,sweepIndex=-1;
+  for(let i=Math.max(0,c.length-6);i<c.length;i++){
+    if(eqLow!==null&&Number(c[i].low)<eqLow&&Number(c[i].close)>eqLow){sweep="BULLISH";sweepIndex=i;}
+    if(eqHigh!==null&&Number(c[i].high)>eqHigh&&Number(c[i].close)<eqHigh){sweep="BEARISH";sweepIndex=i;}
+  }
+  const liquidity="Equal highs: "+(eqHigh===null?"not identified":smcFormatPrice(eqHigh))+" · Equal lows: "+(eqLow===null?"not identified":smcFormatPrice(eqLow));
+  if(!sweep)return {state:"WAIT · NO CONFIRMED LIQUIDITY SWEEP",details:"No recent completed candle swept an equal-high/low level and closed back inside it. A wick alone is insufficient.",levels:liquidity,ready:false};
+  const bullish=sweep==="BULLISH",prior=c.slice(Math.max(0,sweepIndex-8),sweepIndex);
+  const swing=prior.length?(bullish?Math.max(...prior.map(x=>Number(x.high))):Math.min(...prior.map(x=>Number(x.low)))):null;
+  let mss=-1,displacement=-1;
+  for(let i=sweepIndex+1;i<c.length;i++){
+    const x=c[i],body=Math.abs(Number(x.close)-Number(x.open));
+    const directional=bullish?Number(x.close)>Number(x.open):Number(x.close)<Number(x.open);
+    const broke=swing!==null&&(bullish?Number(x.close)>swing:Number(x.close)<swing);
+    const priorBodies=c.slice(Math.max(sweepIndex+1,i-8),i).map(y=>Math.abs(Number(y.close)-Number(y.open)));
+    const average=priorBodies.length?priorBodies.reduce((a,b)=>a+b,0)/priorBodies.length:0;
+    if(directional&&broke){mss=i;if(body>=Math.max(average*1.2,(Number(x.high)-Number(x.low))*0.35))displacement=i;break;}
+  }
+  const extreme=bullish?Math.min(...c.slice(sweepIndex).map(x=>Number(x.low))):Math.max(...c.slice(sweepIndex).map(x=>Number(x.high)));
+  if(mss<0)return {state:"SWEEP FOUND · WAIT FOR MSS",details:(bullish?"Sell-side":"Buy-side")+" liquidity sweep found. Waiting for a completed candle to break the opposing minor swing.",levels:liquidity+" · Sweep extreme: "+smcFormatPrice(extreme),ready:false};
+  if(displacement<0)return {state:"MSS FOUND · WAIT FOR DISPLACEMENT",details:"Structure break found, but the impulse did not meet the displacement threshold. No entry.",levels:"Broken swing: "+smcFormatPrice(swing)+" · Sweep extreme: "+smcFormatPrice(extreme),ready:false};
+  let fvg=null;
+  for(let i=displacement;i>=Math.max(sweepIndex+1,displacement-3);i--)if(i>=2){
+    if(bullish&&Number(c[i-2].high)<Number(c[i].low))fvg={low:Number(c[i-2].high),high:Number(c[i].low),index:i};
+    if(!bullish&&Number(c[i-2].low)>Number(c[i].high))fvg={low:Number(c[i].high),high:Number(c[i-2].low),index:i};
+    if(fvg)break;
+  }
+  if(!fvg)return {state:"DISPLACEMENT FOUND · NO FVG",details:"Impulse found, but no nearby three-candle fair value gap was identified. Do not chase price.",levels:"Broken swing: "+smcFormatPrice(swing)+" · Sweep extreme: "+smcFormatPrice(extreme),ready:false};
+  const retest=c.slice(fvg.index+1).some(x=>Number(x.low)<=fvg.high&&Number(x.high)>=fvg.low);
+  const last=c[c.length-1],reaction=retest&&(bullish?Number(last.close)>Number(last.open):Number(last.close)<Number(last.open));
+  return {state:reaction?"RETEST + REACTION · REVIEW ONLY":retest?"FVG RETESTED · WAIT FOR REACTION":"WAIT · FVG RETEST",details:(bullish?"Bullish":"Bearish")+" sweep → MSS → displacement sequence. "+(retest?"FVG zone was revisited.":"Wait for price to revisit the gap.")+" This is not an order or a validated prediction.",levels:"FVG: "+smcFormatPrice(fvg.low)+"–"+smcFormatPrice(fvg.high)+" · Sweep extreme: "+smcFormatPrice(extreme)+" (invalidation reference only)",ready:reaction};
+}
+function renderSmcSequence(candles,expectedSymbol){
+  if(expectedSymbol!==symbol)return;
+  const r=analyzeSmcSequence(candles);
+  const state=$("smcState");state.textContent=r.state;
+  state.style.color=r.ready?"var(--green)":r.state.includes("BEARISH")?"var(--red)":"var(--blue)";
+  $("smcDetails").textContent=r.details;$("smcLevels").textContent=r.levels;
+}
 function renderCandleAnalytics(candles, expectedSymbol) {
   if(expectedSymbol !== symbol || !candles.length) return;
   lastCandlesForAnalytics=candles;
+  renderSmcSequence(candles,expectedSymbol);
   const last=candles[candles.length-1], recent=candles.slice(-20);
   const change=(last.close-last.open)/last.open*100;
   const high=Math.max(...recent.map(c=>c.high)),low=Math.min(...recent.map(c=>c.low));
