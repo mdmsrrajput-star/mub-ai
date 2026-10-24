@@ -294,6 +294,11 @@ footer{padding:14px 10px}
       <div class="note" id="tournamentAutoStatus" aria-live="polite">Tournament auto mode is stopped. Start it while the session is open to check fresh signals every 30 seconds. Requires sign-in and joining today's tournament.</div>
       <div class="note" id="tournamentPlayMessage" aria-live="polite">Join the daily tournament before making predictions. No deposits or real trades.</div>
     </div>
+    <details class="panel section" id="tournamentHistoryDetails">
+      <summary><strong>PAST TOURNAMENT PREDICTIONS</strong> <span class="note" id="tournamentHistoryCount">· 0 settled</span></summary>
+      <div class="note section" id="tournamentHistorySummary">Settled tournament predictions are saved to your tournament account.</div>
+      <div id="tournamentHistoryList" class="section"><div class="note">Log in to view tournament history.</div></div>
+    </details>
     <div class="panel section">
       <div class="label">TODAY'S LEADERBOARD</div>
       <div id="tournamentLeaderboard" class="note">Loading leaderboard…</div>
@@ -2358,12 +2363,53 @@ async function tournamentRequest(action, payload = {}, method = "POST") {
   if (!response.ok || !data.ok) throw new Error(data.error || "Tournament request failed.");
   return data;
 }
+function renderTournamentHistory(user) {
+  const history = Array.isArray(user?.history) ? user.history : [];
+  const count = tournamentEl("tournamentHistoryCount");
+  const summary = tournamentEl("tournamentHistorySummary");
+  const list = tournamentEl("tournamentHistoryList");
+  if (!count || !summary || !list) return;
+  count.textContent = "· " + history.length + " settled";
+  const wins = history.filter(t => t.result === "WIN").length;
+  const losses = history.filter(t => t.result === "LOSS").length;
+  const draws = history.filter(t => t.result === "DRAW").length;
+  summary.textContent = "Saved history · " + wins + " wins / " + losses + " losses / " + draws + " draws. Separate from demo-account predictions; no cash prizes are credited here.";
+  list.replaceChildren();
+  if (!history.length) {
+    const empty = document.createElement("div");
+    empty.className = "note";
+    empty.textContent = "No settled tournament predictions yet. New results will appear here after expiry.";
+    list.appendChild(empty);
+    return;
+  }
+  history.forEach(trade => {
+    const row = document.createElement("div");
+    row.style.cssText = "padding:10px 0;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr auto;gap:8px";
+    const left = document.createElement("div");
+    const title = document.createElement("div");
+    title.style.fontWeight = "700";
+    title.textContent = (trade.result || "SETTLED") + " · " + (trade.symbol || "") + " · " + (trade.direction || "");
+    const detail = document.createElement("div");
+    detail.className = "note";
+    const date = Number(trade.settledAt) > 0 ? new Date(Number(trade.settledAt)).toLocaleString() : "Time unavailable";
+    detail.textContent = "Stake " + Number(trade.stake || 0) + " T · " + (Number(trade.expirySeconds || 60) / 60) + " min · Entry " + Number(trade.entryPrice || 0).toLocaleString("en-US",{maximumFractionDigits:8}) + " → Exit " + Number(trade.exitPrice || 0).toLocaleString("en-US",{maximumFractionDigits:8}) + " · " + date;
+    const right = document.createElement("div");
+    right.style.cssText = "text-align:right;font-weight:700";
+    const pnl = Number(trade.pnlCoins || 0);
+    right.textContent = (pnl > 0 ? "+" : "") + pnl + " T";
+    right.style.color = pnl > 0 ? "var(--green)" : (pnl < 0 ? "var(--red)" : "var(--muted)");
+    left.append(title, detail);
+    row.append(left, right);
+    list.appendChild(row);
+  });
+}
 function tournamentShowSignedIn(user) {
   tournamentSignedIn = true;
   tournamentEl("tournamentAuthPanel").hidden = true;
   tournamentEl("tournamentPlayPanel").hidden = false;
   tournamentEl("tournamentCoins").textContent = Number(user.coins || 0) + " coins";
-  tournamentEl("tournamentRecord").textContent = "Wins: " + (user.wins || 0) + " · Losses: " + (user.losses || 0) + " · Pending: " + (user.pending || 0);
+  tournamentEl("tournamentRecord").textContent = "Wins: " + (user.wins || 0) + " · Losses: " + (user.losses || 0) + " · Draws: " + (user.draws || 0) + " · Pending: " + (user.pending || 0);
+  renderTournamentHistory(user);
 }
 function tournamentShowSignedOut() {
   tournamentSignedIn = false;
