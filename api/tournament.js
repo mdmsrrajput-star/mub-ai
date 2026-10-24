@@ -80,10 +80,16 @@ async function getMarketPrice(symbol) {
   throw new Error("Tournament predictions currently support BTC/USDT and ETH/USDT only.");
 }
 function publicUser(user) {
-  return { id: user.id, displayName: user.displayName, coins: user.coins, day: user.day, joined: user.joined, pending: (user.pending || []).length, wins: user.wins || 0, losses: user.losses || 0, draws: user.draws || 0 };
+  return {
+    id: user.id, displayName: user.displayName, coins: user.coins, day: user.day,
+    joined: user.joined, pending: (user.pending || []).length,
+    wins: user.wins || 0, losses: user.losses || 0, draws: user.draws || 0,
+    history: Array.isArray(user.history) ? user.history.slice(0, 100) : []
+  };
 }
 async function settleDue(user) {
   const pending = Array.isArray(user.pending) ? user.pending : [];
+  if (!Array.isArray(user.history)) user.history = [];
   const still = [];
   for (const trade of pending) {
     if (Date.now() < trade.expiresAt) { still.push(trade); continue; }
@@ -102,7 +108,17 @@ async function settleDue(user) {
       } else {
         user.losses = (user.losses || 0) + 1;
       }
-      user.lastResult = { result: won ? "WIN" : (tied ? "DRAW" : "LOSS"), symbol: trade.symbol, direction: trade.direction, stake: trade.stake, entryPrice: trade.entryPrice, exitPrice: exit, settledAt: Date.now() };
+      const settledAt = Date.now();
+      const result = won ? "WIN" : (tied ? "DRAW" : "LOSS");
+      const historyEntry = {
+        id: trade.id, symbol: trade.symbol, direction: trade.direction, stake: trade.stake,
+        expirySeconds: trade.expirySeconds, entryPrice: Number(trade.entryPrice), exitPrice: exit,
+        result, startedAt: Number(trade.startedAt), settledAt,
+        pnlCoins: won ? Number(trade.stake) : (tied ? 0 : -Number(trade.stake))
+      };
+      user.history.unshift(historyEntry);
+      user.history = user.history.slice(0, 100);
+      user.lastResult = historyEntry;
     } catch { still.push(trade); }
   }
   user.pending = still;
@@ -193,7 +209,7 @@ export default async function handler(req, res) {
         const salt = crypto.randomBytes(16).toString("base64url");
         const passwordHash = await new Promise((resolve, reject) => crypto.pbkdf2(password, salt, 210000, 32, "sha256", (e, key) => e ? reject(e) : resolve(key.toString("base64url"))));
         const session = londonSession();
-        user = { id, emailHash, displayName, salt, passwordHash, coins: START_COINS, day: session.day, joined: false, pending: [], wins: 0, losses: 0, draws: 0, createdAt: Date.now() };
+        user = { id, emailHash, displayName, salt, passwordHash, coins: START_COINS, day: session.day, joined: false, pending: [], history: [], wins: 0, losses: 0, draws: 0, createdAt: Date.now() };
         await redis(["SET", emailKey, id]);
         await saveUser(user);
       } else {
