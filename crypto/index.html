@@ -483,7 +483,10 @@ footer{padding:14px 10px}
     </div>
     <div id="indicatorQuickPanel" class="tool-panel" hidden>
       <strong>Strategy & indicators</strong>
-      <div class="note">Live signal, RSI/MACD readings, market structure and order-block analysis are shown in the analysis section below.</div>
+      <div class="note">Choose a trading session to display its volume bars on the chart. Times use the session’s local timezone; forex volume may be unavailable from the data provider.</div>
+      <div class="label section">SESSION VOLUME · MANUAL STRATEGY VIEW</div>
+      <div class="controls section" role="group" aria-label="Session volume selection"><button type="button" class="session-volume-button active" data-session-volume="ALL">ALL SESSIONS</button><button type="button" class="session-volume-button" data-session-volume="ASIA">ASIA / INDIA</button><button type="button" class="session-volume-button" data-session-volume="LONDON">LONDON / EUROPE</button><button type="button" class="session-volume-button" data-session-volume="NEW_YORK">NEW YORK</button></div>
+      <div class="note" id="sessionVolumeStatus" aria-live="polite">Chart volume: all sessions. Select a session to isolate its volume bars.</div>
       <div class="controls section"><button type="button" data-jump="advancedTerminal">Market structure</button><button type="button" data-jump="signalValue">Signal</button><button type="button" data-jump="indicators">Indicator readings</button><button type="button" data-jump="orderBlockValue">Order blocks</button></div>
     </div>
     <div id="drawingQuickPanel" class="tool-panel" hidden>
@@ -617,6 +620,7 @@ let priceDelay = 2000;
 let currentCustom = null;
 let customMs = 0;
 let lastVolumeTime = 0;
+let selectedVolumeSession = "ALL";
 let changing = false;
 let analyticsGeneration = 0;
 let lastCandlesForAnalytics = [];
@@ -685,6 +689,7 @@ document.querySelectorAll("[data-chart-type]").forEach(button=>button.addEventLi
     :"Candlestick chart · OHLC view · "+new Date().toLocaleTimeString();
 }));
 $("resetChartView")?.addEventListener("click", () => { if(chart) chart.timeScale().fitContent(); });
+document.querySelectorAll("[data-session-volume]").forEach(button=>button.addEventListener("click",()=>{selectedVolumeSession=button.dataset.sessionVolume||"ALL";applySessionVolume();loadHistory().catch(()=>{});}));
 document.querySelectorAll("[data-jump]").forEach(button=>button.addEventListener("click",()=>{
   const target=$(button.dataset.jump);
   if(target){target.scrollIntoView({behavior:"smooth",block:"start"});target.closest(".panel")?.focus?.();}
@@ -1146,12 +1151,29 @@ function createChart() {
   });
 }
 
-function volumeBar(time,volume,rising) {
-  return {
-    time,value:volume,
-    color:rising ? "rgba(48,214,160,0.45)"
-                  : "rgba(255,104,125,0.45)"
+function getSessionForTime(time) {
+  const date = new Date(Number(time) * 1000);
+  const mins = zone => {
+    const parts = new Intl.DateTimeFormat("en-GB", {timeZone:zone,hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(date);
+    const get = type => Number((parts.find(p=>p.type===type)||{}).value || 0);
+    return get("hour")*60+get("minute");
   };
+  const asia=mins("Asia/Kolkata"), london=mins("Europe/London"), ny=mins("America/New_York");
+  if (asia>=540 && asia<1080) return "ASIA";
+  if (london>=480 && london<990) return "LONDON";
+  if (ny>=570 && ny<960) return "NEW_YORK";
+  return "OFF_SESSION";
+}
+function volumeBar(time,volume,rising) {
+  const session=getSessionForTime(time);
+  const visible=selectedVolumeSession==="ALL" || selectedVolumeSession===session;
+  return {time,value:visible?volume:0,color:rising?"rgba(48,214,160,0.62)":"rgba(255,104,125,0.62)"};
+}
+function applySessionVolume() {
+  document.querySelectorAll("[data-session-volume]").forEach(button=>button.classList.toggle("active",button.dataset.sessionVolume===selectedVolumeSession));
+  const labels={ALL:"All sessions",ASIA:"Asia / India (09:00–18:00 IST)",LONDON:"London / Europe (08:00–16:30 London time)",NEW_YORK:"New York (09:30–16:00 New York time)"};
+  const status=$("sessionVolumeStatus");
+  if(status) status.textContent="Chart volume: "+labels[selectedVolumeSession]+". Price candles remain unchanged; volume outside the selected session is hidden.";
 }
 
 function stopMarketSocket() {
