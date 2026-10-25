@@ -1173,7 +1173,8 @@ function applySessionVolume() {
   document.querySelectorAll("[data-session-volume]").forEach(button=>button.classList.toggle("active",button.dataset.sessionVolume===selectedVolumeSession));
   const labels={ALL:"All sessions",ASIA:"Asia / India (09:00–18:00 IST)",LONDON:"London / Europe (08:00–16:30 London time)",NEW_YORK:"New York (09:30–16:00 New York time)"};
   const status=$("sessionVolumeStatus");
-  if(status) status.textContent="Chart volume: "+labels[selectedVolumeSession]+". Price candles remain unchanged; volume outside the selected session is hidden.";
+  if(status) status.textContent="Chart volume: "+labels[selectedVolumeSession]+". Session-open labels appear on available candles; price candles remain unchanged and volume outside the selected session is hidden.";
+  if (typeof syncPredictionChartMarkers === "function") syncPredictionChartMarkers(lastPredictionAccount || {});
 }
 
 function stopMarketSocket() {
@@ -1840,6 +1841,17 @@ function syncPredictionChartMarkers(account) {
       color: up ? "#30d6a0" : "#ff687d", shape: up ? "arrowUp" : "arrowDown",
       text: (t.source === "AUTO" ? "AUTO " : "MANUAL ") + (up ? "UP" : "DOWN") + " · OPEN"
     });
+  }
+  // Session-open labels share the marker list with open paper predictions.
+  const candles = Array.isArray(lastCandlesForAnalytics) ? lastCandlesForAnalytics : [];
+  const sessionNames = {ASIA:"ASIA OPEN",LONDON:"LONDON OPEN",NEW_YORK:"NEW YORK OPEN"};
+  let previousSession = "";
+  for (const candle of candles) {
+    const currentSession = getSessionForTime(candle.time);
+    if (currentSession !== previousSession && sessionNames[currentSession] && (selectedVolumeSession === "ALL" || selectedVolumeSession === currentSession)) {
+      markers.push({time:candle.time,position:"aboveBar",color:currentSession==="ASIA"?"#85aaff":currentSession==="LONDON"?"#f4c95d":"#d49bff",shape:"circle",text:sessionNames[currentSession]});
+    }
+    previousSession = currentSession;
   }
   markers.sort((a,b) => a.time - b.time);
   try { candleSeries.setMarkers(markers); } catch (_) {}
