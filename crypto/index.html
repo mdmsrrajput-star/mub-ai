@@ -487,6 +487,7 @@ footer{padding:14px 10px}
       <div class="label section">SESSION VOLUME · MANUAL STRATEGY VIEW</div>
       <div class="controls section" role="group" aria-label="Session volume selection"><button type="button" class="session-volume-button active" data-session-volume="ALL">ALL SESSIONS</button><button type="button" class="session-volume-button" data-session-volume="ASIA">ASIA / INDIA</button><button type="button" class="session-volume-button" data-session-volume="LONDON">LONDON / EUROPE</button><button type="button" class="session-volume-button" data-session-volume="NEW_YORK">NEW YORK</button></div>
       <div class="note" id="sessionVolumeStatus" aria-live="polite">Chart volume: all sessions. Select a session to isolate its volume bars.</div>
+      <div class="panel section" id="sessionVolumeStats" style="padding:10px"><strong>Session volume statistics</strong><div class="note" id="sessionVolumeStatsNote">Waiting for chart candle data…</div><div class="stats-grid section"><div class="stat"><div class="label">SELECTED TOTAL</div><div id="sessionVolumeTotal">—</div></div><div class="stat"><div class="label">AVG / CANDLE</div><div id="sessionVolumeAverage">—</div></div><div class="stat"><div class="label">HIGHEST CANDLE</div><div id="sessionVolumePeak">—</div></div></div><div class="label section">SESSION COMPARISON · LOADED CHART WINDOW</div><div id="sessionVolumeCompare" class="note">Asia — · London — · New York —</div></div>
       <div class="controls section"><button type="button" data-jump="advancedTerminal">Market structure</button><button type="button" data-jump="signalValue">Signal</button><button type="button" data-jump="indicators">Indicator readings</button><button type="button" data-jump="orderBlockValue">Order blocks</button></div>
     </div>
     <div id="drawingQuickPanel" class="tool-panel" hidden>
@@ -689,7 +690,7 @@ document.querySelectorAll("[data-chart-type]").forEach(button=>button.addEventLi
     :"Candlestick chart · OHLC view · "+new Date().toLocaleTimeString();
 }));
 $("resetChartView")?.addEventListener("click", () => { if(chart) chart.timeScale().fitContent(); });
-document.querySelectorAll("[data-session-volume]").forEach(button=>button.addEventListener("click",()=>{selectedVolumeSession=button.dataset.sessionVolume||"ALL";applySessionVolume();loadHistory().catch(()=>{});}));
+document.querySelectorAll("[data-session-volume]").forEach(button=>button.addEventListener("click",()=>{selectedVolumeSession=button.dataset.sessionVolume||"ALL";applySessionVolume();renderSessionVolumeStats(lastCandlesForAnalytics);loadHistory().catch(()=>{});}));
 document.querySelectorAll("[data-jump]").forEach(button=>button.addEventListener("click",()=>{
   const target=$(button.dataset.jump);
   if(target){target.scrollIntoView({behavior:"smooth",block:"start"});target.closest(".panel")?.focus?.();}
@@ -966,9 +967,38 @@ function learnCandleBehavior(candles,expectedSymbol) {
     " · outcomes UP "+up+" / DOWN "+down+" · recent avg candle range "+avgRange.toFixed(3)+"%. "+
     (samples<8?"Small sample: keep collecting paper data; no learned edge is established.":"Descriptive history only; not a forecast or a trade guarantee.");
 }
+function renderSessionVolumeStats(candles) {
+  const note=$("sessionVolumeStatsNote");
+  if(!Array.isArray(candles)||!candles.length) { if(note) note.textContent="No chart candles loaded yet."; return; }
+  const sessions=["ASIA","LONDON","NEW_YORK"];
+  const names={ASIA:"Asia / India",LONDON:"London / Europe",NEW_YORK:"New York"};
+  const values=candles.map(c=>({c,session:getSessionForTime(c.time),volume:Number(c.volume)}));
+  const hasVolume=values.some(x=>Number.isFinite(x.volume)&&x.volume>0);
+  const totals={};
+  for(const key of sessions) {
+    const rows=values.filter(x=>x.session===key);
+    const valid=rows.filter(x=>Number.isFinite(x.volume)&&x.volume>=0);
+    const total=valid.reduce((sum,x)=>sum+x.volume,0);
+    const peak=valid.reduce((best,x)=>!best||x.volume>best.volume?x:best,null);
+    totals[key]={rows,valid,total,average:valid.length?total/valid.length:0,peak};
+  }
+  const fmt=n=>Number(n).toLocaleString("en-US",{maximumFractionDigits:4});
+  const selected=selectedVolumeSession==="ALL"?values:values.filter(x=>x.session===selectedVolumeSession);
+  const valid=selected.filter(x=>Number.isFinite(x.volume)&&x.volume>=0);
+  const total=valid.reduce((sum,x)=>sum+x.volume,0);
+  const peak=valid.reduce((best,x)=>!best||x.volume>best.volume?x:best,null);
+  $("sessionVolumeTotal").textContent=hasVolume?fmt(total):"N/A";
+  $("sessionVolumeAverage").textContent=hasVolume&&valid.length?fmt(total/valid.length):"N/A";
+  $("sessionVolumePeak").textContent=hasVolume&&peak?fmt(peak.volume):"N/A";
+  if(note) note.textContent=names[selectedVolumeSession]||"All sessions";
+  $("sessionVolumeCompare").textContent=sessions.map(key=>{const x=totals[key];return names[key]+": "+(hasVolume?fmt(x.total):"N/A")+" ("+x.rows.length+" candles)";}).join(" · ");
+  if(!hasVolume&&note) note.textContent+=" · Volume is unavailable for these candles; zero-volume bars do not mean zero market activity.";
+}
+
 function renderCandleAnalytics(candles, expectedSymbol) {
   if(expectedSymbol !== symbol || !candles.length) return;
   lastCandlesForAnalytics=candles;
+  renderSessionVolumeStats(candles);
   renderSmcSequence(candles,expectedSymbol);
   learnCandleBehavior(candles,expectedSymbol);
   const last=candles[candles.length-1], recent=candles.slice(-20);
