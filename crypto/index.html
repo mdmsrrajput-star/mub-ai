@@ -475,7 +475,7 @@ footer{padding:14px 10px}
   </div>
 
   <div class="panel section">
-    <h2 id="chartTitle">BTC / USDT · 5m</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><h2 id="chartTitle">BTC / USDT · 5m</h2><button type="button" id="openTradeHistorySidebar" aria-controls="tradeHistorySidebar">TRADE HISTORY ↗</button></div>
 
     <div class="chart-toolbar" aria-label="Chart tools">
       <div class="chart-tool-group" role="group" aria-label="Chart type">
@@ -590,6 +590,14 @@ footer{padding:14px 10px}
   </div>
 </main>
 
+
+<div id="tradeHistorySidebar" hidden style="position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.58)">
+  <aside role="dialog" aria-modal="true" aria-labelledby="sidebarHistoryTitle" style="position:absolute;right:0;top:0;height:100%;width:min(440px,94vw);overflow:auto;background:#101a2d;border-left:1px solid var(--border);padding:14px;box-shadow:-10px 0 30px rgba(0,0,0,.35)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h2 id="sidebarHistoryTitle">Executed paper trade history</h2><button type="button" id="closeTradeHistorySidebar" aria-label="Close trade history">✕</button></div>
+    <div class="note" id="sidebarHistoryStatus">Syncing saved paper predictions…</div>
+    <div id="sidebarHistoryContent" class="section"><div class="note">Loading saved trade history…</div></div>
+  </aside>
+</div>
 
 <nav class="bottom-nav" aria-label="Dashboard navigation">
   <button type="button" data-jump="tradeControls"><span>⇧</span>Trade</button>
