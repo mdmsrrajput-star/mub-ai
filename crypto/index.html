@@ -2249,39 +2249,68 @@ async function continuousAutoStep(){
     const scan=await response.json();
     if(scan.mode!=="PAPER_ONLY"||scan.liveTradingEnabled!==false||scan.executionEnabled!==false) throw new Error("Scanner safety check failed.");
     const scanResults=Array.isArray(scan.results)?scan.results:[];
-    const candidate=scanResults.find(x=>x.eligible&&x.executionSupported&&["BUY","SELL"].includes(x.signal)&&["1m","5m","10m","15m"].includes(x.timeframe)&&["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","XAUUSD","XAGUSD"].includes(x.symbol));
-    if(!candidate){
+    const allowedSymbols=["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","XAUUSD","XAGUSD"];
+    const freshCandidates=scanResults
+      .filter(x=>x.eligible&&x.executionSupported&&["BUY","SELL"].includes(x.signal)&&["1m","5m","10m","15m"].includes(x.timeframe)&&allowedSymbols.includes(x.symbol))
+      .filter(x=>{
+        const generated=Date.parse(x.generatedAt), age=Date.now()-generated;
+        return Number.isFinite(age)&&age>=0&&age<=90000;
+      })
+      .sort((x,y)=>Number(y.score||y.agreementPercent||0)-Number(x.score||x.agreementPercent||0));
+    const uniqueCandidates=[];
+    const seenCandidateKeys=new Set();
+    for(const item of freshCandidates){
+      const key=String(item.symbol)+"|"+String(item.timeframe)+"|"+String(item.candleTime||item.generatedAt);
+      if(seenCandidateKeys.has(key)) continue;
+      seenCandidateKeys.add(key);
+      uniqueCandidates.push(item);
+    }
+    if(!uniqueCandidates.length){
       const unavailable=scanResults.filter(x=>x.signal==="UNAVAILABLE").length;
       const waits=scanResults.filter(x=>!x.eligible&&x.signal==="WAIT").length;
       const directional=scanResults.filter(x=>!x.eligible&&["BUY","SELL"].includes(x.signal)).length;
+      const stale=scanResults.filter(x=>x.eligible&&x.executionSupported&&["BUY","SELL"].includes(x.signal)).length;
       const topReasons=[...new Set(scanResults.filter(x=>!x.eligible&&x.reason).map(x=>String(x.reason).split(";")[0].trim()).filter(Boolean))].slice(0,2);
-      setContinuousAutoStatus("SCAN COMPLETE · "+Number(scan.scanned||scanResults.length)+" combinations · qualified 0 · WAIT "+waits+" · rejected directional "+directional+" · unavailable "+unavailable+". "+(topReasons.join(" / ")||"No fresh qualifying signal")+". No trade submitted; paper-only.");
+      setContinuousAutoStatus("SCAN COMPLETE · "+Number(scan.scanned||scanResults.length)+" combinations · fresh qualified 0 · WAIT "+waits+" · rejected "+directional+" · unavailable "+unavailable+(stale?" · stale "+stale:"")+". "+(topReasons.join(" / ")||"No fresh qualifying signal")+". No trade submitted; paper-only.");
       return;
     }
-    const generated=Date.parse(candidate.generatedAt);
-    const age=Date.now()-generated;
-    if(!Number.isFinite(age)||age<0||age>90000){
-      setContinuousAutoStatus("Auto scan found a stale candidate; waiting for fresh completed candles.");
+    const slots=Math.max(0,maxOpen-pending.length);
+    if(!slots){
+      setContinuousAutoStatus("OPEN-TRADE LIMIT REACHED · "+pending.length+"/"+maxOpen+" paper trades are open. No new trade submitted.");
       return;
     }
-    const direction=candidate.signal==="BUY"?"UP":"DOWN";
+    const batchCandidates=uniqueCandidates.slice(0,slots);
     const previousSymbol=symbol;
     const previousExpiry=paperExpiry;
-    symbol=candidate.symbol;
-    paperExpiry=candidate.timeframe;
+    let opened=0, failed=0;
+    const openedNames=[];
     try {
-      const started=await startPaperPrediction({direction,source:"AUTO",timeframe:candidate.timeframe,autoZoneKey:String(candidate.candleTime||generated)});
-      if(started) {
-        setContinuousAutoStatus("PAPER TRADE SUBMITTED · "+candidate.symbol+" · "+direction+" · expiry "+candidate.timeframe+" · open trades "+(pending.length+1)+"/"+maxOpen+" · rule agreement "+candidate.agreementPercent+"% (not win probability) · stake "+formatUsd(paperAmount)+".");
-      } else {
-        const detail=$("predictionStatus")?.textContent||"Paper prediction request was not accepted";
-        setContinuousAutoStatus("ENTRY FAILED · "+candidate.symbol+" "+direction+" "+candidate.timeframe+" · "+detail+" · no real order placed.");
+      for(const candidate of batchCandidates){
+        if(!continuousAutoRunning) break;
+        const direction=candidate.signal==="BUY"?"UP":"DOWN";
+        symbol=candidate.symbol;
+        paperExpiry=candidate.timeframe;
+        const started=await startPaperPrediction({direction,source:"AUTO",timeframe:candidate.timeframe,autoZoneKey:String(candidate.candleTime||candidate.generatedAt||Date.now())});
+        if(started){
+          opened++;
+          openedNames.push(candidate.symbol+" "+direction+" "+candidate.timeframe);
+        } else {
+          failed++;
+        }
+        // Refresh the shared ledger after each submission so the next entry respects the live paper balance and open-trade limit.
+        await refreshPredictionAccount().catch(()=>{});
       }
     } finally {
       symbol=previousSymbol;
       paperExpiry=previousExpiry;
       document.querySelectorAll(".expiryButton").forEach(b=>b.classList.toggle("active",b.dataset.expiry===paperExpiry));
       await refreshPredictionAccount().catch(()=>{});
+    }
+    if(opened){
+      setContinuousAutoStatus("BATCH SCAN COMPLETE · opened "+opened+" paper trade"+(opened===1?"":"s")+" · "+openedNames.join(" | ")+(failed?" · "+failed+" entry/entries rejected":"")+" · open trades up to "+Math.min(maxOpen,pending.length+opened)+"/"+maxOpen+". Independent signals are simulated only; agreement is not a win-probability estimate.");
+    } else {
+      const detail=$("predictionStatus")?.textContent||"No entry accepted";
+      setContinuousAutoStatus("QUALIFIED SIGNALS FOUND ("+uniqueCandidates.length+") BUT NO ENTRY WAS ACCEPTED · "+detail+" · no real orders placed.");
     }
   } catch(e) {
     setContinuousAutoStatus("Auto loop paused safely: "+(e.message||"request failed")+". No real order was placed.");
