@@ -38,7 +38,7 @@ button{border:1px solid var(--border);border-radius:8px;padding:9px 10px;
 background:#1b2740;color:var(--text);font-size:12px;font-weight:700}
 button.active{background:#304c80;border-color:var(--blue)}
 button:disabled{opacity:.5}
-#chart{height:330px;width:100%;margin-top:12px}
+ #chart{height:330px;width:100%;margin-top:12px}.chart-stage{position:relative;width:100%}#volumeProfileCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4}
 .value{font-size:18px;font-weight:750;margin-top:8px;overflow-wrap:anywhere}
 .terminal-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;margin-top:12px}
 .terminal-card{grid-column:span 3;min-width:0;background:linear-gradient(145deg,#17233a,#111a2c);border:1px solid var(--border);border-radius:12px;padding:12px}
@@ -491,7 +491,7 @@ footer{padding:14px 10px}
     <div id="indicatorQuickPanel" class="tool-panel" hidden>
       <strong>Strategy & indicators</strong>
       <div class="note">Choose a trading session to display its volume bars on the chart. Times use the session’s local timezone; forex volume may be unavailable from the data provider.</div>
-      <div class="label section">SESSION VOLUME · MANUAL STRATEGY VIEW</div>
+      <div class="label section">SIDE VOLUME PROFILE · MANUAL STRATEGY VIEW</div><div class="controls section"><button type="button" id="volumeProfileToggle" class="active" aria-pressed="true">PROFILE ON</button></div><div class="note" id="volumeProfileStatus">Approximate profile from candle OHLC and volume; POC / VAH / VAL are estimates.</div><div class="label section">SESSION VOLUME · MANUAL STRATEGY VIEW</div>
       <div class="controls section" role="group" aria-label="Session volume selection"><button type="button" class="session-volume-button active" data-session-volume="ALL">ALL SESSIONS</button><button type="button" class="session-volume-button" data-session-volume="ASIA">ASIA / INDIA</button><button type="button" class="session-volume-button" data-session-volume="LONDON">LONDON / EUROPE</button><button type="button" class="session-volume-button" data-session-volume="NEW_YORK">NEW YORK</button></div>
       <div class="note" id="sessionVolumeStatus" aria-live="polite">Chart volume: all sessions. Select a session to isolate its volume bars.</div>
       <div class="panel section" id="sessionVolumeStats" style="padding:10px"><strong>Session volume statistics</strong><div class="note" id="sessionVolumeStatsNote">Waiting for chart candle data…</div><div class="stats-grid section"><div class="stat"><div class="label">SELECTED TOTAL</div><div id="sessionVolumeTotal">—</div></div><div class="stat"><div class="label">AVG / CANDLE</div><div id="sessionVolumeAverage">—</div></div><div class="stat"><div class="label">HIGHEST CANDLE</div><div id="sessionVolumePeak">—</div></div></div><div class="label section">SESSION COMPARISON · LOADED CHART WINDOW</div><div id="sessionVolumeCompare" class="note">Asia — · London — · New York —</div></div>
@@ -517,7 +517,7 @@ footer{padding:14px 10px}
       <button data-tf="1d">1D</button>
       <button data-tf="1w">1W</button>
     </div>
-    <div id="chart"></div>
+    <div class="chart-stage"><div id="chart"></div><canvas id="volumeProfileCanvas" aria-label="Approximate side-mounted volume profile"></canvas></div>
     <div class="note" id="chartStatus">Loading chart...</div>
     <div class="note">Seconds candles are aggregated from actual trades.
     Recent seconds history is limited by the exchange trade-history endpoint.</div>
@@ -629,6 +629,8 @@ let currentCustom = null;
 let customMs = 0;
 let lastVolumeTime = 0;
 let selectedVolumeSession = "ALL";
+let volumeProfileEnabled = true;
+let lastProfileCandles = [];
 let changing = false;
 let analyticsGeneration = 0;
 let lastCandlesForAnalytics = [];
@@ -698,6 +700,7 @@ document.querySelectorAll("[data-chart-type]").forEach(button=>button.addEventLi
 }));
 $("resetChartView")?.addEventListener("click", () => { if(chart) chart.timeScale().fitContent(); });
 document.querySelectorAll("[data-session-volume]").forEach(button=>button.addEventListener("click",()=>{selectedVolumeSession=button.dataset.sessionVolume||"ALL";applySessionVolume();renderSessionVolumeStats(lastCandlesForAnalytics);loadHistory().catch(()=>{});}));
+  const profileToggle=$("volumeProfileToggle"); if(profileToggle) profileToggle.addEventListener("click",()=>{volumeProfileEnabled=!volumeProfileEnabled;profileToggle.classList.toggle("active",volumeProfileEnabled);profileToggle.textContent=volumeProfileEnabled?"PROFILE ON":"PROFILE OFF";profileToggle.setAttribute("aria-pressed",String(volumeProfileEnabled));drawVolumeProfile();});
 document.querySelectorAll("[data-jump]").forEach(button=>button.addEventListener("click",()=>{
   const target=$(button.dataset.jump);
   if(target){target.scrollIntoView({behavior:"smooth",block:"start"});target.closest(".panel")?.focus?.();}
@@ -1185,6 +1188,7 @@ function createChart() {
     if(chart) chart.applyOptions({
       width:el.clientWidth,height:el.clientHeight
     });
+    drawVolumeProfile();
   });
 }
 
@@ -1206,11 +1210,33 @@ function volumeBar(time,volume,rising) {
   const visible=selectedVolumeSession==="ALL" || selectedVolumeSession===session;
   return {time,value:visible?volume:0,color:rising?"rgba(48,214,160,0.62)":"rgba(255,104,125,0.62)"};
 }
+
+function drawVolumeProfile() {
+  const canvas=$("volumeProfileCanvas"), stage=canvas&&canvas.parentElement;
+  if(!canvas||!stage) return;
+  const width=Math.max(1,stage.clientWidth),height=Math.max(1,stage.clientHeight),dpr=window.devicePixelRatio||1;
+  canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
+  const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+  if(!volumeProfileEnabled||!candleSeries||!lastProfileCandles.length){const s=$("volumeProfileStatus");if(s)s.textContent=volumeProfileEnabled?"Waiting for volume-bearing candles…":"Side volume profile hidden.";return;}
+  const rows=lastProfileCandles.filter(c=>(selectedVolumeSession==="ALL"||getSessionForTime(c.time)===selectedVolumeSession)&&Number(c.volume)>0&&Number.isFinite(c.low)&&Number.isFinite(c.high));
+  if(!rows.length){const s=$("volumeProfileStatus");if(s)s.textContent=isForex?"Volume profile unavailable: forex feed supplies no candle volume.":"No usable volume in selected session/window.";return;}
+  const low=Math.min(...rows.map(c=>c.low)),high=Math.max(...rows.map(c=>c.high));if(!(high>low))return;
+  const bins=Math.max(18,Math.min(64,Math.floor(height/6))),step=(high-low)/bins,totals=Array(bins).fill(0);
+  for(const c of rows){const lo=Math.max(0,Math.min(bins-1,Math.floor((c.low-low)/step))),hi=Math.max(0,Math.min(bins-1,Math.floor((c.high-low)/step))),n=Math.max(1,hi-lo+1),share=Number(c.volume)/n;for(let i=lo;i<=hi;i++)totals[i]+=share;}
+  const total=totals.reduce((a,b)=>a+b,0),poc=totals.indexOf(Math.max(...totals));let included=totals[poc],left=poc-1,right=poc+1;
+  while(included<total*.70&&(left>=0||right<bins)){if(left<0)included+=totals[right++];else if(right>=bins)included+=totals[left--];else if(totals[left]>=totals[right])included+=totals[left--];else included+=totals[right++];}
+  const vaLow=Math.max(0,left+1),vaHigh=Math.min(bins-1,right-1),max=Math.max(...totals)||1,profileWidth=Math.min(width*.30,100),x0=8,plotRight=Math.max(70,width-55);
+  for(let i=0;i<bins;i++){const y=candleSeries.priceToCoordinate(low+(i+.5)*step);if(y==null||y<-8||y>height+8)continue;const w=profileWidth*totals[i]/max;ctx.fillStyle=i===poc?"rgba(244,201,93,.9)":i>=vaLow&&i<=vaHigh?"rgba(48,214,160,.65)":"rgba(100,168,255,.48)";ctx.fillRect(x0,y-Math.max(1,height/bins*.42),w,Math.max(2,height/bins*.84));}
+  [{i:poc,label:"POC",color:"#f4c95d"},{i:vaHigh,label:"VAH",color:"#30d6a0"},{i:vaLow,label:"VAL",color:"#30d6a0"}].forEach(v=>{const y=candleSeries.priceToCoordinate(low+(v.i+.5)*step);if(y==null||y<0||y>height)return;ctx.strokeStyle=v.color;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(plotRight,y);ctx.stroke();ctx.setLineDash([]);ctx.font="bold 10px system-ui";ctx.fillStyle=v.color;ctx.fillText(v.label,Math.max(x0+profileWidth+4,plotRight-27),Math.max(11,y-3));});
+  const s=$("volumeProfileStatus");if(s)s.textContent="Approximate volume-at-price · "+rows.length+" candles · "+(selectedVolumeSession==="ALL"?"All sessions":selectedVolumeSession.replace("_"," / "))+" · POC/VAH/VAL estimated from candle ranges, not tick-level data.";
+}
+
 function applySessionVolume() {
   document.querySelectorAll("[data-session-volume]").forEach(button=>button.classList.toggle("active",button.dataset.sessionVolume===selectedVolumeSession));
   const labels={ALL:"All sessions",ASIA:"Asia / India (09:00–18:00 IST)",LONDON:"London / Europe (08:00–16:30 London time)",NEW_YORK:"New York (09:30–16:00 New York time)"};
   const status=$("sessionVolumeStatus");
   if(status) status.textContent="Chart volume: "+labels[selectedVolumeSession]+". Session-open labels appear on available candles; price candles remain unchanged and volume outside the selected session is hidden.";
+  drawVolumeProfile();
   if (typeof syncPredictionChartMarkers === "function") syncPredictionChartMarkers(lastPredictionAccount || {});
 }
 
@@ -1244,13 +1270,14 @@ async function loadHistory() {
     const d = await r.json();
     if (!r.ok || !Array.isArray(d.candles)) throw new Error(d.error || "Forex candles unavailable");
     const candles = d.candles.map(c => ({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close}));
+    lastProfileCandles=d.candles.map(c=>({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close,volume:Number(c.volume||0)}));
     const volumes = candles.map(c => volumeBar(c.time, 0, c.close >= c.open));
     candleSeries.setData(candles); if(areaSeries) areaSeries.setData(candles.map(x=>({time:x.time,value:x.close}))); volumeSeries.setData(volumes); chart.timeScale().fitContent();
     lastVolumeTime = volumes.length ? volumes[volumes.length-1].time : 0;
     $("livePrice").textContent = Number(candles[candles.length-1].close).toFixed(5);
     $("chartTitle").textContent = symbolLabel(symbol) + " · " + timeframe;
     $("chartStatus").textContent = "Twelve Data · " + candles.length + " candles · " + new Date().toLocaleTimeString();
-    renderCandleAnalytics(candles, symbol);
+    renderCandleAnalytics(candles, symbol); drawVolumeProfile();
     return;
   }
   customMs = ["5s","15s","30s"].includes(timeframe)
@@ -1283,9 +1310,8 @@ async function loadHistory() {
     }
 
     const all=[...map.values()].sort((a,b)=>a.time-b.time);
-    candles=all.map(c=>({
-      time:c.time,open:c.open,high:c.high,low:c.low,close:c.close
-    }));
+    candles=all.map(c=>({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close}));
+    lastProfileCandles=all.map(c=>({...c}));
     volumes=all.map(c=>volumeBar(c.time,c.volume,c.close>=c.open));
     currentCustom=all.length ? {...all[all.length-1]} : null;
   } else {
@@ -1293,11 +1319,8 @@ async function loadHistory() {
       API+"/klines?symbol="+symbol+
       "&interval="+timeframe+"&limit=200"
     );
-    candles=rows.map(k=>({
-      time:Math.floor(Number(k[0])/1000),
-      open:Number(k[1]),high:Number(k[2]),
-      low:Number(k[3]),close:Number(k[4])
-    }));
+    candles=rows.map(k=>({time:Math.floor(Number(k[0])/1000),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4])}));
+    lastProfileCandles=rows.map(k=>({time:Math.floor(Number(k[0])/1000),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4]),volume:Number(k[5])}));
     volumes=rows.map(k=>volumeBar(
       Math.floor(Number(k[0])/1000),Number(k[5]),
       Number(k[4])>=Number(k[1])
@@ -1312,6 +1335,7 @@ async function loadHistory() {
   renderCandleAnalytics(candles, symbol);
   chart.timeScale().fitContent();
   lastVolumeTime=volumes.length ? volumes[volumes.length-1].time : 0;
+  drawVolumeProfile();
   $("chartStatus").textContent=timeframe+" · "+candles.length+
     " candles loaded · Waiting for live updates";
 }
