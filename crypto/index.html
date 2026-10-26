@@ -2238,9 +2238,9 @@ async function continuousAutoStep(){
       return;
     }
     if(continuousBatch.length>=5) return;
-    const scanWait=300000-(Date.now()-continuousLastScanAt);
+    const scanWait=60000-(Date.now()-continuousLastScanAt);
     if(continuousLastScanAt && scanWait>0){
-      setContinuousAutoStatus("Auto mode active · next market scan in "+Math.ceil(scanWait/1000)+"s. Scans are spaced 5 minutes apart to limit provider requests.");
+      setContinuousAutoStatus("Auto mode active · next market scan in "+Math.ceil(scanWait/1000)+"s. Scans are spaced 1 minute apart; provider rate limits may delay a scan.");
       return;
     }
     continuousLastScanAt=Date.now();
