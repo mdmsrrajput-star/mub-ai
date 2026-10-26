@@ -2927,6 +2927,99 @@ if (new URLSearchParams(window.location.search).has("tournamentReset")) { tourna
 tournamentRestoreSession().then(()=>tournamentRefresh());
 setInterval(tournamentRefresh, 15000);
 
+
+/* Chart history controls and persistent, easy-access paper trade history drawer. */
+function refreshTradeHistorySidebar() {
+  const target=$("sidebarHistoryContent");
+  if(!target)return;
+  target.replaceChildren();
+  const open=$("openPredictionList"),closed=$("predictionTradeHistoryList");
+  let count=0;
+  for(const [label,source] of [["OPEN PREDICTIONS",open],["CLOSED / SETTLED PREDICTIONS",closed]]) {
+    const heading=document.createElement("div");
+    heading.className="label";
+    heading.style.marginTop="14px";
+    heading.textContent=label;
+    target.appendChild(heading);
+    if(source) {
+      const copy=source.cloneNode(true);
+      copy.removeAttribute("id");
+      copy.querySelectorAll("[id]").forEach(el=>el.removeAttribute("id"));
+      target.appendChild(copy);
+      count += (source.innerText||"").trim() ? (source.children.length||0) : 0;
+    } else {
+      const empty=document.createElement("div");empty.className="note";empty.textContent="No records returned by the paper ledger.";target.appendChild(empty);
+    }
+  }
+  $("sidebarHistoryStatus").textContent=count+" visible history groups · synced from the paper ledger. Keep this dashboard connected to refresh records.";
+}
+$("openTradeHistorySidebar")?.addEventListener("click",()=>{
+  $("tradeHistorySidebar").hidden=false;
+  refreshTradeHistorySidebar();
+});
+$("closeTradeHistorySidebar")?.addEventListener("click",()=>{$("tradeHistorySidebar").hidden=true;});
+$("tradeHistorySidebar")?.addEventListener("click",e=>{if(e.target===$("tradeHistorySidebar"))$("tradeHistorySidebar").hidden=true;});
+const historySyncObserver = new MutationObserver(()=>{if(!$("tradeHistorySidebar")?.hidden)refreshTradeHistorySidebar();});
+["openPredictionList","predictionTradeHistoryList","predictionHistoryCount"].forEach(id=>{const el=$(id);if(el)historySyncObserver.observe(el,{childList:true,subtree:true,characterData:true});});
+
+async function loadPreviousDayChart() {
+  if(isForex) {
+    $("chartHistoryStatus").textContent="Previous-day history depends on the connected forex provider; this control currently supports crypto candles.";
+    return;
+  }
+  if(!["1m","5m","10m","15m","30m","1h","4h","1d"].includes(timeframe)) {
+    $("chartHistoryStatus").textContent="Select 1m or higher timeframe to load the previous day.";
+    return;
+  }
+  stopMarketSocket();
+  $("chartPreviousDayButton").disabled=true;
+  $("chartHistoryStatus").textContent="Loading previous-day candles…";
+  try {
+    const now=new Date(), start=new Date(now);start.setUTCHours(0,0,0,0);start.setUTCDate(start.getUTCDate()-1);
+    const end=new Date(start);end.setUTCDate(end.getUTCDate()+1);
+    const interval=timeframe;
+    let cursor=start.getTime(), rows=[], guard=0;
+    while(cursor<end.getTime()&&guard++<4) {
+      const batch=await getJSON(API+"/klines?symbol="+encodeURIComponent(symbol)+"&interval="+encodeURIComponent(interval)+"&startTime="+cursor+"&endTime="+end.getTime()+"&limit=1000");
+      if(!Array.isArray(batch)||!batch.length)break;
+      rows=rows.concat(batch);
+      const next=Number(batch[batch.length-1][0])+intervalMs(interval);
+      if(next<=cursor)break;
+      cursor=next;
+      if(batch.length<1000)break;
+    }
+    const candles=rows.filter(k=>Number(k[0])>=start.getTime()&&Number(k[0])<end.getTime()).map(k=>({time:Math.floor(Number(k[0])/1000),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4])}));
+    const unique=[...new Map(candles.map(c=>[c.time,c])).values()].sort((a,b)=>a.time-b.time);
+    if(!unique.length)throw new Error("No candles returned for the previous UTC day.");
+    const volumeRows=rows.filter(k=>Number(k[0])>=start.getTime()&&Number(k[0])<end.getTime()).map(k=>({time:Math.floor(Number(k[0])/1000),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4]),volume:Number(k[5])}));
+    lastProfileCandles=volumeRows;
+    candleSeries.setData(unique);
+    if(areaSeries)areaSeries.setData(unique.map(c=>({time:c.time,value:c.close})));
+    volumeSeries.setData(volumeRows.map(c=>volumeBar(c.time,c.volume,c.close>=c.open)));
+    lastVolumeTime=0;
+    chart.timeScale().fitContent();
+    renderCandleAnalytics(unique,symbol);
+    drawVolumeProfile();
+    $("chartHistoryStatus").textContent="Previous UTC day · "+unique.length+" candles · live updates paused. Tap LIVE / RECENT to return.";
+    $("chartStatus").textContent="Historical view · previous UTC day · "+symbolLabel(symbol)+" · "+timeframe;
+    $("chartPreviousDayButton").classList.add("active");
+    $("chartRecentButton").classList.remove("active");
+  } catch(error) {
+    $("chartHistoryStatus").textContent="History unavailable: "+error.message;
+  } finally {$("chartPreviousDayButton").disabled=false;}
+}
+$("chartPreviousDayButton")?.addEventListener("click",loadPreviousDayChart);
+$("chartRecentButton")?.addEventListener("click",async()=>{
+  $("chartRecentButton").classList.add("active");
+  $("chartPreviousDayButton").classList.remove("active");
+  $("chartHistoryStatus").textContent="Reloading recent candles…";
+  try {
+    await loadHistory();
+    connectMarketSocket();
+    $("chartHistoryStatus").textContent="Recent candles · live updates active.";
+  } catch(error) {$("chartHistoryStatus").textContent="Could not reload recent chart: "+error.message;}
+});
+
 </script>
 </body>
   </html>
