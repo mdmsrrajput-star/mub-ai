@@ -389,6 +389,13 @@ footer{padding:14px 10px}
     <div class="note" id="tradeSignalStatus">
       AUTO SIGNAL reads the crypto signal API. Continuous automation is paper-only and runs only while this dashboard remains open.
     </div>
+    <div class="section">
+      <label class="label" for="continuousMaxOpen">MAXIMUM SIMULTANEOUS OPEN PAPER TRADES</label>
+      <select id="continuousMaxOpen" style="width:100%;margin-top:7px;padding:11px;border:1px solid var(--border);border-radius:8px;background:#0b1020;color:var(--text);font-size:16px">
+        <option value="2">2 trades</option><option value="5" selected>5 trades</option><option value="10">10 trades</option><option value="20">20 trades</option><option value="50">50 trades</option><option value="100">100 trades</option>
+      </select>
+      <div class="note">When a fresh qualifying signal appears, MuB may open another simulated trade without waiting for existing trades to settle, up to this limit. Scans remain 5 minutes apart; this is not a win-probability guarantee.</div>
+    </div>
     <div class="controls section" role="group" aria-label="Continuous paper auto trade">
       <button type="button" id="continuousAutoStart" style="flex:1;background:#245e4d;color:#fff">START AUTO LOOP</button>
       <button type="button" id="continuousAutoStop" style="flex:1;background:#7c2d3a;color:#fff" disabled>STOP AUTO</button>
@@ -2225,8 +2232,9 @@ async function continuousAutoStep(){
       }
       setContinuousAutoStatus("Batch "+continuousBatchNumber+" complete: "+wins+"/5 wins. Starting next batch after settlement checks.");
     }
-    if(pending.length){
-      setContinuousAutoStatus("Auto loop active · waiting for "+pending.length+" open paper prediction(s) to settle · Batch "+(continuousBatchNumber+1)+" · "+continuousBatch.length+"/5 settled.");
+    const maxOpen=Math.max(2,Math.min(100,Number($("continuousMaxOpen")?.value)||5));
+    if(pending.length>=maxOpen){
+      setContinuousAutoStatus("OPEN-TRADE LIMIT REACHED · "+pending.length+"/"+maxOpen+" paper trades are open. MuB will resume scanning after one or more settle. Batch "+(continuousBatchNumber+1)+" · "+continuousBatch.length+"/5 settled.");
       return;
     }
     if(continuousBatch.length>=5) return;
@@ -2264,7 +2272,7 @@ async function continuousAutoStep(){
     try {
       const started=await startPaperPrediction({direction,source:"AUTO",timeframe:candidate.timeframe,autoZoneKey:String(candidate.candleTime||generated)});
       if(started) {
-        setContinuousAutoStatus("PAPER TRADE SUBMITTED · "+candidate.symbol+" · "+direction+" · expiry "+candidate.timeframe+" · rule agreement "+candidate.agreementPercent+"% (not win probability) · stake "+formatUsd(paperAmount)+".");
+        setContinuousAutoStatus("PAPER TRADE SUBMITTED · "+candidate.symbol+" · "+direction+" · expiry "+candidate.timeframe+" · open trades "+(pending.length+1)+"/"+maxOpen+" · rule agreement "+candidate.agreementPercent+"% (not win probability) · stake "+formatUsd(paperAmount)+".");
       } else {
         const detail=$("predictionStatus")?.textContent||"Paper prediction request was not accepted";
         setContinuousAutoStatus("ENTRY FAILED · "+candidate.symbol+" "+direction+" "+candidate.timeframe+" · "+detail+" · no real order placed.");
