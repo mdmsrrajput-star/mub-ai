@@ -2015,6 +2015,7 @@ function renderCandleLearning(data) {
     (learn.accuracyPercent === null || learn.accuracyPercent === undefined ? "accuracy not available" : Number(learn.accuracyPercent) + "% observed directional accuracy") +
     " · " + (learn.appliedAsFilter ? "Used as a filter for this signal." : "Not used as a decisive filter for this signal.");
 }
+let latestSettledPredictionHistory = [];
 function renderPredictionAccount(data) {
   const account = data && data.account ? data.account : {};
   syncPredictionChartMarkers(account);
@@ -2069,6 +2070,7 @@ function renderPredictionAccount(data) {
   const rawHistory = Array.isArray(account.history) ? account.history : [];
   const overallStats = formatLearningWinRate(rawHistory);
   const history = overallStats.settled;
+  latestSettledPredictionHistory = history.slice();
   const autoStats = formatLearningWinRate(history.filter(t => t.source === "AUTO"));
   const manualStats = formatLearningWinRate(history.filter(t => t.source === "MANUAL"));
   $("learningOverallWinRate").textContent = overallStats.text;
@@ -2942,25 +2944,29 @@ function refreshTradeHistorySidebar() {
   const target=$("sidebarHistoryContent");
   if(!target)return;
   target.replaceChildren();
-  const open=$("openPredictionList"),closed=$("predictionTradeHistoryList");
-  let count=0;
-  for(const [label,source] of [["OPEN PREDICTIONS",open],["CLOSED / SETTLED PREDICTIONS",closed]]) {
-    const heading=document.createElement("div");
-    heading.className="label";
-    heading.style.marginTop="14px";
-    heading.textContent=label;
-    target.appendChild(heading);
-    if(source) {
-      const copy=source.cloneNode(true);
-      copy.removeAttribute("id");
-      copy.querySelectorAll("[id]").forEach(el=>el.removeAttribute("id"));
-      target.appendChild(copy);
-      count += (source.innerText||"").trim() ? (source.children.length||0) : 0;
-    } else {
-      const empty=document.createElement("div");empty.className="note";empty.textContent="No records returned by the paper ledger.";target.appendChild(empty);
-    }
-  }
-  $("sidebarHistoryStatus").textContent=count+" visible history groups · synced from the paper ledger. Keep this dashboard connected to refresh records.";
+  const open=$("openPredictionList");
+  const openHeading=document.createElement("div");
+  openHeading.className="label";openHeading.style.marginTop="14px";openHeading.textContent="OPEN PREDICTIONS";target.appendChild(openHeading);
+  if(open) { const copy=open.cloneNode(true);copy.removeAttribute("id");copy.querySelectorAll("[id]").forEach(el=>el.removeAttribute("id"));target.appendChild(copy); }
+  const heading=document.createElement("div");
+  heading.className="label";heading.style.marginTop="18px";
+  heading.textContent="ALL CLOSED / SETTLED PREDICTIONS ("+latestSettledPredictionHistory.length+")";target.appendChild(heading);
+  if(!latestSettledPredictionHistory.length) {
+    const empty=document.createElement("div");empty.className="note";empty.textContent="No settled records are currently available from the paper ledger.";target.appendChild(empty);
+  } else latestSettledPredictionHistory.forEach(t=>{
+    const row=document.createElement("div");row.style.cssText="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)";
+    const left=document.createElement("div"),title=document.createElement("div");
+    title.style.fontWeight="700";title.style.color=t.result==="WIN"?"var(--green)":t.result==="LOSS"?"var(--red)":"var(--text)";
+    title.textContent=(t.result||"SETTLED")+" · "+(t.symbol||"")+" · "+(t.source==="AUTO"?"AUTO":"MANUAL");
+    const detail=document.createElement("div");detail.className="note";
+    detail.textContent=(t.direction||"")+" · "+(t.timeframe||t.expiry||"")+" · Stake "+formatUsd(t.stake)+" · Entry "+Number(t.entryPrice||0).toLocaleString("en-US",{maximumFractionDigits:8})+" → Exit "+Number(t.exitPrice||0).toLocaleString("en-US",{maximumFractionDigits:8});
+    left.append(title,detail);
+    const right=document.createElement("div");right.style.cssText="text-align:right;font-weight:700";right.style.color=Number(t.pnl)>0?"var(--green)":Number(t.pnl)<0?"var(--red)":"var(--text)";
+    right.textContent=(Number(t.pnl)>0?"+":"")+formatUsd(t.pnl);
+    const time=document.createElement("div");time.className="note";time.textContent=t.settledAt?new Date(Number(t.settledAt)).toLocaleString():"";right.appendChild(time);
+    row.append(left,right);target.appendChild(row);
+  });
+  $("sidebarHistoryStatus").textContent=latestSettledPredictionHistory.length+" settled paper trades · scroll inside this panel to see older records.";
 }
 $("openTradeHistorySidebar")?.addEventListener("click",()=>{
   $("tradeHistorySidebar").hidden=false;
