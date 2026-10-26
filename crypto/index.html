@@ -475,7 +475,7 @@ footer{padding:14px 10px}
   </div>
 
   <div class="panel section">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><h2 id="chartTitle">BTC / USDT · 5m</h2><button type="button" id="openTradeHistorySidebar" aria-controls="tradeHistorySidebar">TRADE HISTORY ↗</button></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><h2 id="chartTitle">BTC / USDT · 5m</h2><button type="button" id="openTradeHistorySidebar" aria-controls="tradeHistorySidebar" aria-haspopup="dialog" style="font-weight:700;min-height:36px">OPEN FULL TRADE HISTORY ↗</button></div>
 
     <div class="chart-toolbar" aria-label="Chart tools">
       <div class="chart-tool-group" role="group" aria-label="Chart type">
@@ -2969,10 +2969,14 @@ function refreshTradeHistorySidebar() {
   $("sidebarHistoryStatus").textContent=latestSettledPredictionHistory.length+" settled paper trades · scroll inside this panel to see older records.";
 }
 $("openTradeHistorySidebar")?.addEventListener("click",()=>{
-  $("tradeHistorySidebar").hidden=false;
+  const drawer=$("tradeHistorySidebar");
+  if(!drawer)return;
+  drawer.hidden=false;
+  drawer.style.display="block";
+  drawer.setAttribute("aria-hidden","false");
   refreshTradeHistorySidebar();
 });
-$("closeTradeHistorySidebar")?.addEventListener("click",()=>{$("tradeHistorySidebar").hidden=true;});
+$("closeTradeHistorySidebar")?.addEventListener("click",()=>{const drawer=$("tradeHistorySidebar");if(drawer){drawer.hidden=true;drawer.style.display="";drawer.setAttribute("aria-hidden","true");}});
 $("tradeHistorySidebar")?.addEventListener("click",e=>{if(e.target===$("tradeHistorySidebar"))$("tradeHistorySidebar").hidden=true;});
 const historySyncObserver = new MutationObserver(()=>{if(!$("tradeHistorySidebar")?.hidden)refreshTradeHistorySidebar();});
 /* Keep the main dropdown compact; the drawer provides a scrollable full-history view. */
