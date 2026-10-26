@@ -2095,7 +2095,7 @@ function renderPredictionAccount(data) {
     list.appendChild(empty);
     return;
   }
-  history.slice(0,20).forEach(t => {
+  history.slice(0,5).forEach(t => {
     const row = document.createElement("div");
     row.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 0;border-bottom:1px solid var(--border)";
     const left = document.createElement("div");
@@ -2969,6 +2969,10 @@ $("openTradeHistorySidebar")?.addEventListener("click",()=>{
 $("closeTradeHistorySidebar")?.addEventListener("click",()=>{$("tradeHistorySidebar").hidden=true;});
 $("tradeHistorySidebar")?.addEventListener("click",e=>{if(e.target===$("tradeHistorySidebar"))$("tradeHistorySidebar").hidden=true;});
 const historySyncObserver = new MutationObserver(()=>{if(!$("tradeHistorySidebar")?.hidden)refreshTradeHistorySidebar();});
+/* Keep the main dropdown compact; the drawer provides a scrollable full-history view. */
+const historyDropdownStyle=document.createElement("style");
+historyDropdownStyle.textContent="#predictionTradeHistoryList{max-height:none} #tradeHistorySidebar aside{overscroll-behavior:contain} #sidebarHistoryContent{padding-bottom:28px}";
+document.head.appendChild(historyDropdownStyle);
 ["openPredictionList","predictionTradeHistoryList","predictionHistoryCount"].forEach(id=>{const el=$(id);if(el)historySyncObserver.observe(el,{childList:true,subtree:true,characterData:true});});
 
 
