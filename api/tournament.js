@@ -124,12 +124,39 @@ async function settleDue(user) {
   user.pending = still;
 }
 async function leaderboard(day) {
-  const ids = await redis(["ZREVRANGE", "mub:tournament:leaderboard:" + day, "0", "49", "WITHSCORES"]);
+  // Settle expired predictions for the current leaders before ranking them.
+  // Otherwise the public board can display stale coin totals until each player
+  // opens their own tournament panel.
+  const key = "mub:tournament:leaderboard:" + day;
+  const initial = await redis(["ZREVRANGE", key, "0", "49", "WITHSCORES"]);
+  if (Array.isArray(initial)) {
+    for (let i = 0; i + 1 < initial.length; i += 2) {
+      const u = await getUser(String(initial[i]));
+      if (!u || u.day !== day || !u.joined) continue;
+      const beforePending = (u.pending || []).length;
+      if (beforePending && (u.pending || []).some(t => Date.now() >= Number(t.expiresAt))) {
+        await settleDue(u);
+        await saveUser(u);
+      }
+    }
+  }
+
+  // Re-read after settlement because coin balances (and therefore ranks) may
+  // have changed. Only settled results affect the leaderboard score.
+  const ids = await redis(["ZREVRANGE", key, "0", "49", "WITHSCORES"]);
   const rows = [];
   if (!Array.isArray(ids)) return rows;
   for (let i = 0; i + 1 < ids.length; i += 2) {
     const u = await getUser(String(ids[i]));
-    if (u && u.day === day && u.joined) rows.push({ rank: rows.length + 1, displayName: u.displayName, coins: u.coins, wins: u.wins || 0, losses: u.losses || 0 });
+    if (u && u.day === day && u.joined) rows.push({
+      rank: rows.length + 1,
+      displayName: u.displayName,
+      coins: u.coins,
+      wins: u.wins || 0,
+      losses: u.losses || 0,
+      draws: u.draws || 0,
+      pending: (u.pending || []).length
+    });
   }
   return rows;
 }
