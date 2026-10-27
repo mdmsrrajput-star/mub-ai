@@ -417,7 +417,8 @@ footer{padding:14px 10px}
       <span>PAST PREDICTIONS <span id="predictionHistoryCount" class="note">· loading</span></span>
       <span id="predictionHistoryChevron" aria-hidden="true">▾</span>
     </button>
-    <div class="note">Open positions and settled UP / DOWN paper predictions, including entry/exit prices and P/L.</div>
+    <div class="note">This compact dropdown shows only the 5 most recent settled trades. Use the button below to browse the complete saved history in a scrollable side panel.</div>
+    <button type="button" id="openTradeHistorySidebarFromDropdown" style="width:100%;margin-top:8px;font-weight:700;min-height:38px">VIEW ALL TRADE HISTORY ↗</button>
     <div id="predictionHistoryDropdown" class="section" hidden>
       <div class="label">OPEN PREDICTIONS</div>
       <div id="openPredictionList" class="section"><div class="note">Loading open predictions…</div></div>
@@ -2968,14 +2969,16 @@ function refreshTradeHistorySidebar() {
   });
   $("sidebarHistoryStatus").textContent=latestSettledPredictionHistory.length+" settled paper trades · scroll inside this panel to see older records.";
 }
-$("openTradeHistorySidebar")?.addEventListener("click",()=>{
+function openTradeHistoryDrawer() {
   const drawer=$("tradeHistorySidebar");
   if(!drawer)return;
   drawer.hidden=false;
   drawer.style.display="block";
   drawer.setAttribute("aria-hidden","false");
   refreshTradeHistorySidebar();
-});
+}
+$("openTradeHistorySidebar")?.addEventListener("click",openTradeHistoryDrawer);
+$("openTradeHistorySidebarFromDropdown")?.addEventListener("click",openTradeHistoryDrawer);
 $("closeTradeHistorySidebar")?.addEventListener("click",()=>{const drawer=$("tradeHistorySidebar");if(drawer){drawer.hidden=true;drawer.style.display="";drawer.setAttribute("aria-hidden","true");}});
 $("tradeHistorySidebar")?.addEventListener("click",e=>{if(e.target===$("tradeHistorySidebar"))$("tradeHistorySidebar").hidden=true;});
 const historySyncObserver = new MutationObserver(()=>{if(!$("tradeHistorySidebar")?.hidden)refreshTradeHistorySidebar();});
