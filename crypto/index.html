@@ -596,7 +596,18 @@ footer{padding:14px 10px}
   <aside role="dialog" aria-modal="true" aria-labelledby="sidebarHistoryTitle" style="position:absolute;right:0;top:0;height:100%;width:min(440px,94vw);overflow:auto;background:#101a2d;border-left:1px solid var(--border);padding:14px;box-shadow:-10px 0 30px rgba(0,0,0,.35)">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h2 id="sidebarHistoryTitle">Executed paper trade history</h2><button type="button" id="closeTradeHistorySidebar" aria-label="Close trade history">✕</button></div>
     <div class="note" id="sidebarHistoryStatus">Syncing saved paper predictions…</div>
+    <div class="section" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <input id="historySearch" type="search" placeholder="Search market / trade…" aria-label="Search trade history" style="grid-column:1/-1;min-width:0">
+      <select id="historyMarketFilter" aria-label="Filter by market"><option value="">All markets</option></select>
+      <select id="historyModeFilter" aria-label="Filter by mode"><option value="">AUTO + MANUAL</option><option value="AUTO">AUTO</option><option value="MANUAL">MANUAL</option></select>
+      <select id="historyResultFilter" aria-label="Filter by result"><option value="">WIN + LOSS</option><option value="WIN">WIN</option><option value="LOSS">LOSS</option></select>
+      <label class="note">From <input id="historyDateFrom" type="date" aria-label="From date" style="display:block;width:100%;min-width:0"></label>
+      <label class="note">To <input id="historyDateTo" type="date" aria-label="To date" style="display:block;width:100%;min-width:0"></label>
+    </div>
     <div id="sidebarHistoryContent" class="section"><div class="note">Loading saved trade history…</div></div>
+    <div class="section" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <button type="button" id="historyPrevPage">← Newer</button><span id="historyPageStatus" class="note">Page 1</span><button type="button" id="historyNextPage">Older →</button>
+    </div>
   </aside>
 </div>
 
@@ -2941,7 +2952,9 @@ setInterval(tournamentRefresh, 15000);
 
 
 /* Chart history controls and persistent, easy-access paper trade history drawer. */
-function refreshTradeHistorySidebar() {
+let tradeHistoryPage=0;
+const TRADE_HISTORY_PAGE_SIZE=20;
+function renderTradeHistoryPage() {
   const target=$("sidebarHistoryContent");
   if(!target)return;
   target.replaceChildren();
@@ -2949,12 +2962,26 @@ function refreshTradeHistorySidebar() {
   const openHeading=document.createElement("div");
   openHeading.className="label";openHeading.style.marginTop="14px";openHeading.textContent="OPEN PREDICTIONS";target.appendChild(openHeading);
   if(open) { const copy=open.cloneNode(true);copy.removeAttribute("id");copy.querySelectorAll("[id]").forEach(el=>el.removeAttribute("id"));target.appendChild(copy); }
+  const search=($("historySearch")?.value||"").trim().toLowerCase();
+  const market=$("historyMarketFilter")?.value||"";
+  const mode=$("historyModeFilter")?.value||"";
+  const result=$("historyResultFilter")?.value||"";
+  const from=$("historyDateFrom")?.value||"";
+  const to=$("historyDateTo")?.value||"";
+  const filtered=latestSettledPredictionHistory.filter(t=>{
+    const stamp=Number(t.settledAt)||0;
+    const date=stamp?new Date(stamp).toISOString().slice(0,10):"";
+    const hay=[t.symbol,t.direction,t.timeframe,t.expiry,t.source,t.result,t.id].join(" ").toLowerCase();
+    return (!search||hay.includes(search))&&(!market||t.symbol===market)&&(!mode||(t.source==="AUTO"?"AUTO":"MANUAL")===mode)&&(!result||t.result===result)&&(!from||(date&&date>=from))&&(!to||(date&&date<=to));
+  });
+  const pages=Math.max(1,Math.ceil(filtered.length/TRADE_HISTORY_PAGE_SIZE));
+  tradeHistoryPage=Math.min(Math.max(0,tradeHistoryPage),pages-1);
   const heading=document.createElement("div");
   heading.className="label";heading.style.marginTop="18px";
-  heading.textContent="ALL CLOSED / SETTLED PREDICTIONS ("+latestSettledPredictionHistory.length+")";target.appendChild(heading);
-  if(!latestSettledPredictionHistory.length) {
-    const empty=document.createElement("div");empty.className="note";empty.textContent="No settled records are currently available from the paper ledger.";target.appendChild(empty);
-  } else latestSettledPredictionHistory.forEach(t=>{
+  heading.textContent="SETTLED PAPER TRADES · "+filtered.length+" MATCHES";target.appendChild(heading);
+  if(!filtered.length) {
+    const empty=document.createElement("div");empty.className="note";empty.textContent="No trades match these filters.";target.appendChild(empty);
+  } else filtered.slice(tradeHistoryPage*TRADE_HISTORY_PAGE_SIZE,(tradeHistoryPage+1)*TRADE_HISTORY_PAGE_SIZE).forEach(t=>{
     const row=document.createElement("div");row.style.cssText="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)";
     const left=document.createElement("div"),title=document.createElement("div");
     title.style.fontWeight="700";title.style.color=t.result==="WIN"?"var(--green)":t.result==="LOSS"?"var(--red)":"var(--text)";
@@ -2967,8 +2994,27 @@ function refreshTradeHistorySidebar() {
     const time=document.createElement("div");time.className="note";time.textContent=t.settledAt?new Date(Number(t.settledAt)).toLocaleString():"";right.appendChild(time);
     row.append(left,right);target.appendChild(row);
   });
-  $("sidebarHistoryStatus").textContent=latestSettledPredictionHistory.length+" settled paper trades · scroll inside this panel to see older records.";
+  $("historyPageStatus").textContent="Page "+(tradeHistoryPage+1)+" / "+pages;
+  $("historyPrevPage").disabled=tradeHistoryPage<=0;
+  $("historyNextPage").disabled=tradeHistoryPage>=pages-1;
+  $("sidebarHistoryStatus").textContent=filtered.length+" matching of "+latestSettledPredictionHistory.length+" saved settled paper trades.";
 }
+function refreshTradeHistorySidebar() {
+  const marketSelect=$("historyMarketFilter");
+  if(marketSelect) {
+    const selected=marketSelect.value;
+    const markets=[...new Set(latestSettledPredictionHistory.map(t=>t.symbol).filter(Boolean))].sort();
+    marketSelect.replaceChildren(new Option("All markets",""));
+    markets.forEach(m=>marketSelect.add(new Option(m,m)));
+    marketSelect.value=markets.includes(selected)?selected:"";
+  }
+  renderTradeHistoryPage();
+}
+["historySearch","historyMarketFilter","historyModeFilter","historyResultFilter","historyDateFrom","historyDateTo"].forEach(id=>{
+  $(id)?.addEventListener(id==="historySearch"?"input":"change",()=>{tradeHistoryPage=0;renderTradeHistoryPage();});
+});
+$("historyPrevPage")?.addEventListener("click",()=>{tradeHistoryPage=Math.max(0,tradeHistoryPage-1);renderTradeHistoryPage();});
+$("historyNextPage")?.addEventListener("click",()=>{tradeHistoryPage++;renderTradeHistoryPage();});
 function openTradeHistoryDrawer() {
   const drawer=$("tradeHistorySidebar");
   if(!drawer)return;
