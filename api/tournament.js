@@ -48,11 +48,26 @@ function clearCookie(res) {
 }
 function json(res, status, body) { return res.status(status).json({ mode: "TOURNAMENT_DEMO_ONLY", realMoneyPayoutEnabled: false, ...body }); }
 function londonSession(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
-  const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
-  const day = `${p.year}-${p.month}-${p.day}`;
-  const minute = Number(p.hour) * 60 + Number(p.minute);
-  return { day, minute, open: minute >= 480 && minute < 990, startsAt: day + " 08:00 Europe/London", endsAt: day + " 16:30 Europe/London" };
+  // Tournament day follows the Indian calendar. It opens with the Indian
+  // equity-market session and closes at the London market close. Europe/London
+  // automatically accounts for British Summer Time vs GMT.
+  const indiaParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
+  const india = Object.fromEntries(indiaParts.map(x => [x.type, x.value]));
+  const day = `${india.year}-${india.month}-${india.day}`;
+  const indiaMinute = Number(india.hour) * 60 + Number(india.minute);
+  const londonParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
+  const london = Object.fromEntries(londonParts.map(x => [x.type, x.value]));
+  const londonMinute = Number(london.hour) * 60 + Number(london.minute);
+  const open = indiaMinute >= 555 && londonMinute < 990;
+  return {
+    day,
+    minute: indiaMinute,
+    open,
+    startsAt: day + " 09:15 Asia/Kolkata",
+    endsAt: day + " 16:30 Europe/London",
+    timeZone: "Asia/Kolkata",
+    schedule: "09:15 IST until 16:30 Europe/London (London market close)"
+  };
 }
 function userKey(id) { return "mub:tournament:user:" + id; }
 async function getUser(id) {
@@ -271,14 +286,14 @@ export default async function handler(req, res) {
       return json(res, 200, { ok: true, user: publicUser(user), session, payout: { maximumUsd: 25, status: "DISABLED_PENDING_COMPLIANCE_AND_PAYMENT_REVIEW" } });
     }
     if (action === "join") {
-      if (!session.open) return json(res, 409, { ok: false, error: "Tournament entry is open only from 08:00 to 16:30 Europe/London." });
+      if (!session.open) return json(res, 409, { ok: false, error: "Tournament entry is open from 09:15 India time until the London market closes (16:30 Europe/London)." });
       if (user.day !== session.day) { user.day = session.day; user.coins = START_COINS; user.joined = false; user.pending = []; user.wins = 0; user.losses = 0; user.draws = 0; }
       user.joined = true;
       await saveUser(user);
       return json(res, 200, { ok: true, user: publicUser(user), session, message: "You joined today's free tournament with 100 coins." });
     }
     if (action === "play") {
-      if (!session.open) return json(res, 409, { ok: false, error: "Tournament trades are accepted only from 08:00 to 16:30 Europe/London." });
+      if (!session.open) return json(res, 409, { ok: false, error: "Tournament trades are accepted from 09:15 India time until the London market closes (16:30 Europe/London)." });
       if (!user.joined || user.day !== session.day) return json(res, 409, { ok: false, error: "Join today's tournament first." });
       if ((user.pending || []).length >= 3) return json(res, 409, { ok: false, error: "Maximum 3 unsettled tournament predictions." });
       const symbol = String(body.symbol || "").toUpperCase();
