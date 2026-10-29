@@ -841,7 +841,7 @@ async function refreshForexPrice() {
 }
 async function refreshForexSignal() {
   const s = symbol, tf = paperExecutionMode === "AUTO" ? selectedAnalysisTimeframe() : timeframe;
-  const r = await fetch("/api/forex-signal?symbol=" + s + "&timeframe=" + encodeURIComponent(tf) + "&_=" + Date.now(), {cache:"no-store"});
+  const r = await fetch("/api/forex-market?action=signal&symbol=" + s + "&timeframe=" + encodeURIComponent(tf) + "&_=" + Date.now(), {cache:"no-store"});
   const d = await r.json();
   if (s !== symbol || (paperExecutionMode === "AUTO" ? tf !== selectedAnalysisTimeframe() : tf !== timeframe)) return;
   if (!r.ok || !d.signal) throw new Error(d.error || "Forex signal unavailable");
