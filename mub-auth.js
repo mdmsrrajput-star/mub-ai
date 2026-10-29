@@ -34,7 +34,7 @@
     const logout = document.createElement("button");
     logout.type = "button"; logout.className = "mub-auth-button"; logout.textContent = "Sign out";
     logout.addEventListener("click", async () => {
-      await fetch("/api/auth?action=logout", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"logout"}), credentials:"same-origin" });
+      await fetch("/api/chat?action=logout", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"logout"}), credentials:"same-origin" });
       location.reload();
     });
     profile.appendChild(logout);
@@ -43,7 +43,7 @@
     status.textContent = "Verifying Google account…";
     button.disabled = true;
     try {
-      const response = await fetch("/api/auth", { method:"POST", headers:{"Content-Type":"application/json"}, credentials:"same-origin", body:JSON.stringify({action:"login",credential}) });
+      const response = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, credentials:"same-origin", body:JSON.stringify({action:"login",credential}) });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "Sign-in failed.");
       showUser(data.user);
@@ -56,7 +56,7 @@
   }
   async function loadMe() {
     try {
-      const r = await fetch("/api/auth?action=me", {credentials:"same-origin",cache:"no-store"});
+      const r = await fetch("/api/chat?action=me", {credentials:"same-origin",cache:"no-store"});
       if (r.ok) { const d = await r.json(); if (d.user) showUser(d.user); }
     } catch {}
   }
