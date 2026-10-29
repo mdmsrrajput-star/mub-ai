@@ -3082,6 +3082,30 @@ if(chart&&chart.timeScale&&chart.timeScale().subscribeVisibleLogicalRangeChange)
 }
 
 </script>
+
+<style id="mub-dashboard-only-cleanup">
+  /* Trading-dashboard-only build: keep legacy tournament nodes inert for compatibility,
+     but remove them from the visible product. */
+  #tournamentMenuWrap, #tournamentPanel { display: none !important; }
+</style>
+<script id="mub-dashboard-only-cleanup-script">
+  (function () {
+    function removeTournamentAccountOption() {
+      var selector = document.getElementById("accountSelector");
+      if (!selector) return;
+      Array.from(selector.options).forEach(function (option) {
+        if (option.value === "TOURNAMENT") option.remove();
+      });
+      if (selector.value === "TOURNAMENT") selector.value = "DEMO";
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", removeTournamentAccountOption, { once: true });
+    } else {
+      removeTournamentAccountOption();
+    }
+  })();
+</script>
+
 </body>
   </html>
   
