@@ -5,6 +5,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b1020">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/mub.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/mub.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MuB AI">
 <title>MuB AI Trading Dashboard</title>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
@@ -3106,6 +3111,14 @@ if(chart&&chart.timeScale&&chart.timeScale().subscribeVisibleLogicalRangeChange)
   })();
 </script>
 
+<script id="mub-pwa-registration">
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("/service-worker.js", { scope: "/" })
+      .catch(function (error) { console.warn("MuB app shell registration failed:", error); });
+  });
+}
+</script>
 </body>
   </html>
   

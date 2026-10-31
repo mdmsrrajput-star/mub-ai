@@ -1,0 +1,24 @@
+{
+  "id": "/crypto/",
+  "name": "MuB AI Trading",
+  "short_name": "MuB AI",
+  "description": "MuB AI trading dashboard with paper trading only.",
+  "start_url": "/crypto/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090f1c",
+  "theme_color": "#0c1423",
+  "icons": [
+    {
+      "src": "/icons/mub.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": [
+    "finance",
+    "utilities"
+  ]
+}
