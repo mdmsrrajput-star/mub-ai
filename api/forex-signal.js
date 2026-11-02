@@ -1,3 +1,5 @@
+import { analyzeHeikinAshi } from "./_lib/heikin-ashi.js";
+
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "GET") { res.setHeader("Allow", "GET"); return res.status(405).json({ error: "Method not allowed" }); }
@@ -37,13 +39,37 @@ export default async function handler(req, res) {
     const closes = cs.map(c=>c.close);
     const ema = (a,n) => { const k=2/(n+1); let v=a[0]; return a.map((x,i)=>(v=i?x*k+v*(1-k):x)); };
     const e20=ema(closes,20), e50=ema(closes,50), te20=ema(trend.map(c=>c.close),20), te50=ema(trend.map(c=>c.close),50);
+    const macdLine=ema(closes,12).map((v,i)=>v-ema(closes,26)[i]);
+    const macdSignal=ema(macdLine,9);
+    const macd=macdLine.at(-1), macdSignalValue=macdSignal.at(-1);
+    const heikinAshi=analyzeHeikinAshi(cs);
     let gains=0,losses=0; for(let i=closes.length-14;i<closes.length;i++){const d=closes[i]-closes[i-1];gains+=Math.max(d,0);losses+=Math.max(-d,0);}
     const rsi=losses===0?100:100-100/(1+gains/losses);
     const bullish=e20.at(-1)>e50.at(-1), trendBull=te20.at(-1)>te50.at(-1);
     let score=50; if(bullish===trendBull)score+=20; if(rsi>50&&rsi<70&&bullish)score+=15; if(rsi<50&&rsi>30&&!bullish)score+=15;
-    const signal=score>=65?(bullish?"BUY":"SELL"):"WAIT";
+    const proposedSide=bullish?"BUY":"SELL";
+    const haConfirmed=heikinAshi.direction===proposedSide && heikinAshi.strong &&
+      !heikinAshi.uncertain && heikinAshi.stochastic.direction===proposedSide;
+    const signal=score>=65 && haConfirmed ? proposedSide : "WAIT";
     const last=cs.at(-1), blocks=[];
     for(let i=cs.length-1;i>=Math.max(2,cs.length-18);i--){const a=cs[i-2],b=cs[i-1],c=cs[i]; const displacement=Math.abs(b.close-b.open); if(displacement < Math.abs(b.close)*0.00035) continue; if(c.low>a.high){blocks.push({direction:"BULLISH",lower:a.high,upper:c.low,formedAt:c.time,retested:cs.slice(i+1).some(x=>x.low<=c.low&&x.high>=a.high),reaction:cs.slice(i+1).some(x=>x.close>c.low)});break;} if(c.high<a.low){blocks.push({direction:"BEARISH",lower:c.high,upper:a.low,formedAt:c.time,retested:cs.slice(i+1).some(x=>x.high>=c.high&&x.low<=a.low),reaction:cs.slice(i+1).some(x=>x.close<c.high)});break;} }
-    return res.status(200).json({ ok:true, mode:"PAPER_ONLY", liveTradingEnabled:false, symbol, interval:requested, signal, score, candlesUsed:cs.length, generatedAt:new Date().toISOString(), indicators:{ema20:e20.at(-1),ema50:e50.at(-1),rsi14:rsi,macd:0,macdSignal:0,atr14:0}, trend:trendBull?"BULLISH":"BEARISH", reasons:["EMA20/EMA50 trend filter","Higher-timeframe trend confirmation","RSI14: "+rsi.toFixed(1)], orderBlocks:blocks, candles:cs });
+    return res.status(200).json({
+      ok:true, mode:"PAPER_ONLY", liveTradingEnabled:false, executionEnabled:false,
+      symbol, interval:requested, signal, score, candlesUsed:cs.length,
+      generatedAt:new Date().toISOString(),
+      indicators:{ema20:e20.at(-1),ema50:e50.at(-1),rsi14:rsi,macd,macdSignal:macdSignalValue,atr14:0},
+      trend:trendBull?"BULLISH":"BEARISH",
+      heikinAshi,
+      reasons:[
+        "EMA20/EMA50 trend filter",
+        "Higher-timeframe trend confirmation",
+        "RSI14: "+rsi.toFixed(1),
+        "MACD confirmation: "+(macd>macdSignalValue?"BULLISH":macd<macdSignalValue?"BEARISH":"NEUTRAL"),
+        "Heikin Ashi: "+heikinAshi.direction+(heikinAshi.strong?" · strong candle":" · weak/uncertain candle"),
+        "Stochastic 14,3: %K "+(heikinAshi.stochastic.k ?? "n/a")+" / %D "+(heikinAshi.stochastic.d ?? "n/a")+" · "+heikinAshi.stochastic.direction,
+        haConfirmed ? "Heikin Ashi and Stochastic confirm the EMA direction" : "Heikin Ashi/Stochastic confirmation missing; signal held at WAIT"
+      ],
+      orderBlocks:blocks, candles:cs
+    });
   } catch(e) { return res.status(502).json({ error:e.message || "Market signal calculation failed" }); }
 }

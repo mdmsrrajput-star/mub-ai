@@ -2,7 +2,7 @@ name: MuB paper API checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, cleanup/mub-trading-dashboard-only]
   push:
     branches: [main, mub-paper-risk-controls]
 
@@ -19,4 +19,9 @@ jobs:
       - name: Check paper-trading API syntax
         run: node --check api/paper-trades.js
       - name: Check signal API syntax
-        run: node --check api/crypto-signal.js
+        run: |
+          node --check api/crypto-signal.js
+          node --check api/forex-signal.js
+          node --check api/_lib/heikin-ashi.js
+      - name: Test Heikin Ashi confirmation
+        run: node --test api/_lib/heikin-ashi.test.js
