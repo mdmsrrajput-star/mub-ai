@@ -1,4 +1,6 @@
 
+import { analyzeHeikinAshi } from "./_lib/heikin-ashi.js";
+
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
 
@@ -285,6 +287,8 @@ export default async function handler(req, res) {
       trendEma20 > trendEma50 ? "BULLISH" :
       trendEma20 < trendEma50 ? "BEARISH" :
       "NEUTRAL";
+    // Heikin Ashi and Stochastic are evaluated only on completed source candles.
+    const heikinAshi = analyzeHeikinAshi(candles);
 
     // Strict three-candle fair value gap detection.
     // Only use completed candles, recent gaps, and meaningful displacement.
@@ -401,6 +405,24 @@ export default async function handler(req, res) {
     const bullishOB = orderBlocks.find(b => b.direction === "BULLISH");
     const bearishOB = orderBlocks.find(b => b.direction === "BEARISH");
 
+    const strategyScoreFor = side => {
+      const direction = side === "BUY" ? "BULLISH" : "BEARISH";
+      const rsiMacdAligned = side === "BUY"
+        ? rsi14 > 50 && macd > macdSignal
+        : rsi14 < 50 && macd < macdSignal;
+      const matchingOb = side === "BUY" ? bullishOB : bearishOB;
+      return (
+        (heikinAshi.direction === side ? 20 : 0) +
+        (heikinAshi.strong ? 15 : 0) +
+        (heikinAshi.stochastic.direction === side ? 15 : 0) +
+        (trend === direction ? 15 : 0) +
+        (rsiMacdAligned ? 15 : 0) +
+        (fvg && fvg.direction === direction && fvg.retested && fvg.reaction ? 10 : 0) +
+        (matchingOb && matchingOb.retested && matchingOb.reaction ? 10 : 0)
+      );
+    };
+    const strategyScore = Math.max(strategyScoreFor("BUY"), strategyScoreFor("SELL"));
+
     // Three independent directional filters.
     const votes = [
       {
@@ -436,6 +458,8 @@ export default async function handler(req, res) {
         "; requires 8 samples and 58% accuracy before use",
       tf.trend + " trend: " + trend,
       "Indicator agreement: " + agreementPercent.toFixed(0) + "%",
+      "Heikin Ashi: " + heikinAshi.direction + (heikinAshi.strong ? " · strong candle" : " · weak/uncertain candle"),
+      "Stochastic 14,3: %K " + (heikinAshi.stochastic.k ?? "n/a") + " / %D " + (heikinAshi.stochastic.d ?? "n/a") + " · " + heikinAshi.stochastic.direction,
       fvg
         ? "Recent FVG: " + fvg.direction
         : "No qualifying recent FVG",
@@ -456,7 +480,11 @@ export default async function handler(req, res) {
       bullishOB && bullishOB.retested && bullishOB.reaction && bullishOB.ageCandles > 0 && bullishOB.ageCandles <= 12 &&
       fvg.direction === "BULLISH" &&
       trend === "BULLISH" &&
-      buyVotes === 3
+      buyVotes === 3 &&
+      heikinAshi.direction === "BUY" &&
+      heikinAshi.strong &&
+      !heikinAshi.uncertain &&
+      heikinAshi.stochastic.direction === "BUY"
     ) {
       signal = "BUY";
       reasons.push("Bullish FVG retest and reaction confirmed");
@@ -469,7 +497,11 @@ export default async function handler(req, res) {
       bearishOB && bearishOB.retested && bearishOB.reaction && bearishOB.ageCandles > 0 && bearishOB.ageCandles <= 12 &&
       fvg.direction === "BEARISH" &&
       trend === "BEARISH" &&
-      sellVotes === 3
+      sellVotes === 3 &&
+      heikinAshi.direction === "SELL" &&
+      heikinAshi.strong &&
+      !heikinAshi.uncertain &&
+      heikinAshi.stochastic.direction === "SELL"
     ) {
       signal = "SELL";
       reasons.push("Bearish FVG retest and reaction confirmed");
@@ -504,6 +536,9 @@ export default async function handler(req, res) {
       score: buyVotes - sellVotes,
       agreementPercent,
       agreementIsWinProbability: false,
+      strategyScore,
+      strategyScoreIsWinProbability: false,
+      heikinAshi,
       votes,
       reasons,
       candleLearning: candlePatternStats,
