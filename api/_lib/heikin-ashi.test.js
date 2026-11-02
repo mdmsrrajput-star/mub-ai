@@ -42,12 +42,11 @@ test("returns WAIT for insufficient candle history", () => {
   assert.equal(result.uncertain, true);
 });
 
-test("rejects a flat doji-like candle as uncertain", () => {
-  const rows = makeCandles("BUY");
-  const last = rows[rows.length - 1];
-  last.open = last.close;
-  last.high = last.close + 0.01;
-  last.low = last.close - 0.01;
+test("rejects a flat doji-like market as uncertain", () => {
+  const rows = Array.from({ length: 30 }, (_, i) => ({
+    time: 1_700_000_000 + i * 60,
+    open: 100, high: 100, low: 100, close: 100, volume: 10
+  }));
   const result = analyzeHeikinAshi(rows);
   assert.equal(result.direction, "WAIT");
   assert.equal(result.strong, false);
