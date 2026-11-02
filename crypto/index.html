@@ -1578,7 +1578,8 @@ async function refreshSignal() {
       data.signal==="SELL"?"var(--red)":"var(--blue)";
 
     $("signalScore").textContent="Score: "+data.score+
-      " · "+data.candlesUsed+" completed candles";
+      " · "+data.candlesUsed+" completed candles"+
+      (Number.isFinite(Number(data.strategyScore)) ? " · HA strategy "+data.strategyScore+"/100" : "");
 
     const calculatedAt = Date.parse(data.generatedAt);
     if(!Number.isFinite(calculatedAt)) throw new Error("Signal response has no valid calculation timestamp");
@@ -1604,13 +1605,17 @@ async function refreshSignal() {
     if(data.interval !== requestedSignalTimeframe) throw new Error("Timeframe mismatch: requested "+requestedSignalTimeframe+", received "+data.interval);
 
     const i=data.indicators||{};
+    const ha=data.heikinAshi||{};
+    const stoch=ha.stochastic||{};
     $("indicators").textContent=
       "EMA20: "+Number(i.ema20).toFixed(2)+
       " · EMA50: "+Number(i.ema50).toFixed(2)+
       " · RSI14: "+Number(i.rsi14).toFixed(2)+
       " · MACD: "+Number(i.macd).toFixed(3)+
       " · Signal: "+Number(i.macdSignal).toFixed(3)+
-      " · ATR14: "+Number(i.atr14).toFixed(2);
+      " · ATR14: "+Number(i.atr14).toFixed(2)+
+      " · Heikin Ashi: "+(ha.direction||"n/a")+(ha.strong?" (strong)":" (weak/uncertain)")+
+      " · Stochastic 14,3: "+(stoch.k??"n/a")+"/"+(stoch.d??"n/a")+" "+(stoch.direction||"n/a");
 
     $("signalReasons").textContent=(data.reasons||[]).join(" · ");
     renderCandleLearning(data);
