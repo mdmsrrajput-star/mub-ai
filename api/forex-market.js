@@ -9,7 +9,7 @@ export default async function handler(req, res, env = {}) {
   if (!symbols[symbol]) return res.status(400).json({ error: "Unsupported market symbol" });
   if (!intervals[interval]) return res.status(400).json({ error: "Unsupported timeframe" });
   const apiKey = env.TWELVE_DATA_API_KEY;
-  if (!apiKey) return res.status(503).json({ error: "Forex data is not configured. Add TWELVE_DATA_API_KEY in Vercel environment variables." });
+  if (!apiKey) return res.status(503).json({ error: "Forex data is not configured. Configure TWELVE_DATA_API_KEY in Cloudflare Worker secrets." });
   try {
     const url = "https://api.twelvedata.com/time_series?symbol=" + encodeURIComponent(symbols[symbol]) + "&interval=" + encodeURIComponent(intervals[interval]) + "&outputsize=180&timezone=UTC&apikey=" + encodeURIComponent(apiKey);
     const upstream = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
