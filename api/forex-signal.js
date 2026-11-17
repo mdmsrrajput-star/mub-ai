@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+export default async function handler(req, res, env = {}) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "GET") { res.setHeader("Allow", "GET"); return res.status(405).json({ error: "Method not allowed" }); }
   const symbols = { EURUSD:"EUR/USD", GBPUSD:"GBP/USD", USDJPY:"USD/JPY", AUDUSD:"AUD/USD", USDCAD:"USD/CAD", USDCHF:"USD/CHF", NZDUSD:"NZD/USD", EURJPY:"EUR/JPY", GBPJPY:"GBP/JPY", XAGUSD:"XAG/USD", XAUUSD:"XAU/USD" };
@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   const requested = String(req.query?.timeframe || "5m");
   const intervals = { "1m": "1min", "5m": "5min", "10m": "1min", "15m": "15min", "30m": "30min", "1h": "1h", "4h": "4h", "1d": "1day" };
   if (!symbols[symbol] || !intervals[requested]) return res.status(400).json({ error: "Unsupported market symbol or timeframe" });
-  const key = process.env.TWELVE_DATA_API_KEY;
+  const key = env.TWELVE_DATA_API_KEY;
   if (!key) return res.status(503).json({ error: "TWELVE_DATA_API_KEY is not configured" });
   async function candles(tf, size=180) {
     const outputsize = tf === "10m" ? Math.max(size, 700) : size;
