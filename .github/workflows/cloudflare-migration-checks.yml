@@ -1,0 +1,26 @@
+name: Cloudflare migration checks
+on:
+  push:
+    branches:
+      - migration/cloudflare-workers
+  pull_request:
+    branches:
+      - main
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check Worker and API syntax
+        run: |
+          node --check src/worker.js
+          node --check api/_lib/vercel-adapter.js
+          node --check api/paper-trades.js
+          node --check api/paper-predictions.js
+          node --check api/crypto-signal.js
+          node --check api/forex-signal.js
+          node --check api/forex-market.js
+          node --check api/auto-scan.js
