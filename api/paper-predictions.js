@@ -35,7 +35,7 @@ async function getPrice(symbol, env) {
   if (!ALLOWED_SYMBOLS.includes(symbol)) throw new Error("Supported crypto, forex and silver symbols");
   if (["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","XAGUSD","XAUUSD"].includes(symbol)) {
     const apiKey = env.TWELVE_DATA_API_KEY;
-    if (!apiKey) throw new Error("Forex data is not configured. Add TWELVE_DATA_API_KEY in Vercel environment variables.");
+    if (!apiKey) throw new Error("Forex data is not configured. Configure TWELVE_DATA_API_KEY in Cloudflare Worker secrets.");
     const pair = ({EURUSD:"EUR/USD",GBPUSD:"GBP/USD",USDJPY:"USD/JPY",AUDUSD:"AUD/USD",USDCAD:"USD/CAD",USDCHF:"USD/CHF",NZDUSD:"NZD/USD",EURJPY:"EUR/JPY",GBPJPY:"GBP/JPY",XAGUSD:"XAG/USD",XAUUSD:"XAU/USD"})[symbol];
     const url = "https://api.twelvedata.com/price?symbol=" + encodeURIComponent(pair) + "&apikey=" + encodeURIComponent(apiKey);
     const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
