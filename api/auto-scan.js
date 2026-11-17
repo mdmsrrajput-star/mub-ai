@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+export default async function handler(req, res, env = {}) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-MuB-Mode", "PAPER_ONLY");
 
