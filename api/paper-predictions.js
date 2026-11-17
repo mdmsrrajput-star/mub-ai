@@ -10,9 +10,9 @@ const EXPIRIES = { "1m": 60000, "5m": 300000, "10m": 600000, "15m": 900000, "30m
 function send(res, status, data) {
   return res.status(status).json({ mode: "PAPER_ONLY", liveTradingEnabled: false, ...data });
 }
-async function redisCommand(command) {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+async function redisCommand(command, env) {
+  const url = env.UPSTASH_REDIS_REST_URL;
+  const token = env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) throw new Error("Paper prediction storage is not configured");
   const response = await fetch(url, {
     method: "POST",
@@ -31,10 +31,10 @@ async function redisCommand(command) {
   }
   return data.result;
 }
-async function getPrice(symbol) {
+async function getPrice(symbol, env) {
   if (!ALLOWED_SYMBOLS.includes(symbol)) throw new Error("Supported crypto, forex and silver symbols");
   if (["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","XAGUSD","XAUUSD"].includes(symbol)) {
-    const apiKey = process.env.TWELVE_DATA_API_KEY;
+    const apiKey = env.TWELVE_DATA_API_KEY;
     if (!apiKey) throw new Error("Forex data is not configured. Add TWELVE_DATA_API_KEY in Vercel environment variables.");
     const pair = ({EURUSD:"EUR/USD",GBPUSD:"GBP/USD",USDJPY:"USD/JPY",AUDUSD:"AUD/USD",USDCAD:"USD/CAD",USDCHF:"USD/CHF",NZDUSD:"NZD/USD",EURJPY:"EUR/JPY",GBPJPY:"GBP/JPY",XAGUSD:"XAG/USD",XAUUSD:"XAU/USD"})[symbol];
     const url = "https://api.twelvedata.com/price?symbol=" + encodeURIComponent(pair) + "&apikey=" + encodeURIComponent(apiKey);
@@ -184,30 +184,30 @@ if action == "settle" then
 end
 return redis.error_reply("Unsupported action")
 `;
-async function ledger(action, payload = {}) {
-  const raw = await redisCommand(["EVAL", LUA, "1", STATE_KEY, action, JSON.stringify(payload)]);
+async function ledger(action, payload = {}, env) {
+  const raw = await redisCommand(["EVAL", LUA, "1", STATE_KEY, action, JSON.stringify(payload)], env);
   if (typeof raw !== "string") throw new Error("Unexpected paper prediction ledger response");
   return JSON.parse(raw);
 }
-export default async function handler(req, res) {
+export default async function handler(req, res, env = {}) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   if (req.method === "GET") {
     try {
-      let state = await ledger("status");
+      let state = await ledger("status", {}, env);
       const active = Array.isArray(state.active) ? state.active : (state.active && state.active.status ? [state.active] : []);
       const now = Date.now();
       for (const prediction of active) {
         if (prediction && prediction.status === "PENDING" && now >= Number(prediction.expiresAt)) {
           try {
-            const price = await getPrice(prediction.symbol);
-            state = await ledger("settle", { id: prediction.id, now: Date.now(), price });
+            const price = await getPrice(prediction.symbol, env);
+            state = await ledger("settle", { id: prediction.id, now: Date.now(), price }, env);
           } catch (settleError) {
             console.error("Prediction settlement deferred:", settleError.message);
           }
         }
       }
-      state = await ledger("status");
+      state = await ledger("status", {}, env);
       return send(res, 200, { ok: true, account: state, payoutRate: PAYOUT_RATE });
     } catch (error) {
       console.error("Prediction status failed:", error.message);
@@ -233,7 +233,7 @@ export default async function handler(req, res) {
     if (!Object.prototype.hasOwnProperty.call(EXPIRIES, expiry)) return send(res, 400, { ok: false, error: "Unsupported expiry" });
     if (!Number.isFinite(amount) || amount < 1 || amount > MAX_STAKE || Math.round(amount * 100) !== amount * 100) return send(res, 400, { ok: false, error: "Stake must be $1 to $1,000 with at most two decimal places" });
     const now = Date.now();
-    const price = await getPrice(symbol);
+    const price = await getPrice(symbol, env);
     const account = await ledger("start", {
       id: `paper-${now}-${Math.random().toString(36).slice(2, 9)}`,
       symbol, direction, expiry, amount, price, now, duration: EXPIRIES[expiry],
