@@ -1,4 +1,11 @@
-
 {
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "node --check src/worker.js && node --check api/_lib/vercel-adapter.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
 }
