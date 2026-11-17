@@ -24,6 +24,8 @@ jobs:
           node --check api/forex-signal.js
           node --check api/forex-market.js
           node --check api/auto-scan.js
+      - name: Test Worker adapter
+        run: node --test tests/worker-adapter.test.js
       - name: Install Wrangler and validate deployment bundle
         run: |
           npm install
