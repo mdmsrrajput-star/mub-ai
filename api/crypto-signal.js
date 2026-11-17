@@ -1,5 +1,5 @@
 
-export default async function handler(req, res) {
+export default async function handler(req, res, env = {}) {
   res.setHeader("Cache-Control", "no-store");
 
   if (req.method !== "GET") {
