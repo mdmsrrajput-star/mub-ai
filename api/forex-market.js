@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+export default async function handler(req, res, env = {}) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   if (req.method !== "GET") { res.setHeader("Allow", "GET"); return res.status(405).json({ error: "Method not allowed" }); }
@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   const interval = String(req.query?.timeframe || "5m");
   if (!symbols[symbol]) return res.status(400).json({ error: "Unsupported market symbol" });
   if (!intervals[interval]) return res.status(400).json({ error: "Unsupported timeframe" });
-  const apiKey = process.env.TWELVE_DATA_API_KEY;
+  const apiKey = env.TWELVE_DATA_API_KEY;
   if (!apiKey) return res.status(503).json({ error: "Forex data is not configured. Add TWELVE_DATA_API_KEY in Vercel environment variables." });
   try {
     const url = "https://api.twelvedata.com/time_series?symbol=" + encodeURIComponent(symbols[symbol]) + "&interval=" + encodeURIComponent(intervals[interval]) + "&outputsize=180&timezone=UTC&apikey=" + encodeURIComponent(apiKey);
