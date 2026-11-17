@@ -241,7 +241,7 @@ export default async function handler(req, res, env = {}) {
       timeframe: ["1m","5m","10m","15m"].includes(String(body.timeframe || expiry)) ? String(body.timeframe || expiry) : expiry,
       idempotencyKey: typeof body.idempotencyKey === "string" && /^[A-Za-z0-9:_|.-]{8,180}$/.test(body.idempotencyKey)
         ? body.idempotencyKey : null
-    });
+    }, env);
     return send(res, 201, { ok: true, account, payoutRate: PAYOUT_RATE, message: "Paper prediction started; no real-money order was placed." });
   } catch (error) {
     const message = error.message || "Paper prediction could not be started";
