@@ -24,7 +24,7 @@ export default {
       const legacyOrigin = String(env.LEGACY_VERCEL_ORIGIN || "").replace(/\/$/, "");
       if (!legacyOrigin) return Response.json({ ok: false, mode: "PAPER_ONLY", liveTradingEnabled: false, executionEnabled: false, error: "Scanner bridge is not configured" }, { status: 503 });
       const target = new URL(url.pathname + url.search, legacyOrigin);
-      return fetch(new Request(target, request));
+      return fetch(new Request(target.toString(), { method: "GET", headers: request.headers }));
     }
 
     const handler = routes.get(url.pathname);
