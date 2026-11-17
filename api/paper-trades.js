@@ -216,9 +216,9 @@ function send(res, status, data) {
   });
 }
 
-async function redisCommand(command) {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+async function redisCommand(command, env) {
+  const url = env.UPSTASH_REDIS_REST_URL;
+  const token = env.UPSTASH_REDIS_REST_TOKEN;
 
   if (!url || !token) {
     throw new Error("Missing Upstash environment variables");
@@ -244,7 +244,7 @@ async function redisCommand(command) {
   return result.result;
 }
 
-async function runLedger(action, payload = {}) {
+async function runLedger(action, payload = {}, env) {
   const result = await redisCommand([
     "EVAL",
     LUA_SCRIPT,
@@ -254,7 +254,7 @@ async function runLedger(action, payload = {}) {
     LEGACY_SPOT_KEY,
     action,
     JSON.stringify(payload)
-  ]);
+  ], env);
 
   if (typeof result !== "string") {
     throw new Error("Unexpected response from paper account database");
@@ -263,7 +263,7 @@ async function runLedger(action, payload = {}) {
   return JSON.parse(result);
 }
 
-async function getPrice(symbol) {
+async function getPrice(symbol, env) {
   const allowed = ["BTCUSDT", "ETHUSDT"];
   if (!allowed.includes(symbol)) {
     throw new Error("Only BTCUSDT and ETHUSDT are supported");
@@ -334,12 +334,12 @@ async function getPrice(symbol) {
   throw new Error("Could not retrieve a public market price from any configured provider");
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, env = {}) {
   res.setHeader("Cache-Control", "no-store");
 
   if (req.method === "GET") {
     try {
-      const account = await runLedger("status");
+      const account = await runLedger("status", {}, env);
       return send(res, 200, {
         ok: true,
         account,
@@ -364,7 +364,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const writeKey = process.env.PAPER_WRITE_KEY;
+  const writeKey = env.PAPER_WRITE_KEY;
   const suppliedKey = req.headers["x-paper-key"];
 
   if (!writeKey || typeof suppliedKey !== "string" ||
@@ -395,12 +395,12 @@ export default async function handler(req, res) {
     actionForDiagnostics = typeof action === "string" ? action : "unknown";
 
     if (action === "manage") {
-      const account = await runLedger("status");
+      const account = await runLedger("status", {}, env);
       const checked = [];
       for (const symbol of ["BTCUSDT", "ETHUSDT"]) {
         const position = account.positions?.[symbol];
         if (!position) continue;
-        const price = await getPrice(symbol);
+        const price = await getPrice(symbol, env);
         const stopHit = position.side === "LONG"
           ? price <= Number(position.stopLoss)
           : price >= Number(position.stopLoss);
@@ -413,7 +413,7 @@ export default async function handler(req, res) {
             dailyLossLimit: DAILY_LOSS_LIMIT,
             maxNotional: MAX_POSITION_NOTIONAL,
             dayStart: Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())
-          });
+          }, env);
           checked.push({ symbol, closed: true, reason: stopHit ? "STOP_LOSS" : "TAKE_PROFIT", exitPrice: price, account: updated });
         } else {
           checked.push({ symbol, closed: false, price });
@@ -423,7 +423,7 @@ export default async function handler(req, res) {
     }
 
     if (action === "status") {
-      const account = await runLedger("status");
+      const account = await runLedger("status", {}, env);
       return send(res, 200, {
         ok: true,
         account,
@@ -457,7 +457,7 @@ export default async function handler(req, res) {
 
     let price = Number(body.price);
     if (!Number.isFinite(price) || price <= 0) {
-      price = await getPrice(symbol);
+      price = await getPrice(symbol, env);
     }
 
     const payload = {
@@ -476,7 +476,7 @@ export default async function handler(req, res) {
       })()
     };
 
-    const account = await runLedger(action, payload);
+    const account = await runLedger(action, payload, env);
 
     return send(res, 200, {
       ok: true,
