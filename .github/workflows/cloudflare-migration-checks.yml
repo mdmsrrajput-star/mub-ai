@@ -7,7 +7,7 @@ on:
     branches:
       - main
 jobs:
-  syntax:
+  syntax-and-config:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,3 +24,7 @@ jobs:
           node --check api/forex-signal.js
           node --check api/forex-market.js
           node --check api/auto-scan.js
+      - name: Install Wrangler and validate deployment bundle
+        run: |
+          npm install
+          npx wrangler deploy --dry-run
