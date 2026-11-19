@@ -14,12 +14,5 @@
   },
   "vars": {
     "LEGACY_VERCEL_ORIGIN": "https://mub-brown.vercel.app"
-  },
-  "secrets": {
-    "required": [
-      "UPSTASH_REDIS_REST_URL",
-      "UPSTASH_REDIS_REST_TOKEN",
-      "TWELVE_DATA_API_KEY"
-    ]
   }
 }
