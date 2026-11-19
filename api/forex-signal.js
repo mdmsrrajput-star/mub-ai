@@ -4,7 +4,7 @@ export default async function handler(req, res, env = {}) {
   const symbols = { EURUSD:"EUR/USD", GBPUSD:"GBP/USD", USDJPY:"USD/JPY", AUDUSD:"AUD/USD", USDCAD:"USD/CAD", USDCHF:"USD/CHF", NZDUSD:"NZD/USD", EURJPY:"EUR/JPY", GBPJPY:"GBP/JPY", XAGUSD:"XAG/USD", XAUUSD:"XAU/USD" };
   const symbol = String(req.query?.symbol || "EURUSD").toUpperCase();
   const requested = String(req.query?.timeframe || "5m");
-  const intervals = { "1m": "1min", "5m": "5min", "10m": "1min", "15m": "15min", "30m": "30min", "1h": "1h", "4h": "4h", "1d": "1day" };
+  const intervals = { "1m": "1min", "3m": "3min", "5m": "5min", "10m": "1min", "15m": "15min", "30m": "30min", "1h": "1h", "4h": "4h", "1d": "1day" };
   if (!symbols[symbol] || !intervals[requested]) return res.status(400).json({ error: "Unsupported market symbol or timeframe" });
   const key = env.TWELVE_DATA_API_KEY;
   if (!key) return res.status(503).json({ error: "TWELVE_DATA_API_KEY is not configured" });
