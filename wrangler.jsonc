@@ -19,7 +19,6 @@
     "required": [
       "UPSTASH_REDIS_REST_URL",
       "UPSTASH_REDIS_REST_TOKEN",
-      "PAPER_WRITE_KEY",
       "TWELVE_DATA_API_KEY"
     ]
   }
