@@ -5,7 +5,7 @@ const STARTING_BALANCE = 10000;
 const MAX_STAKE = 1000;
 const PAYOUT_RATE = 1.0;
 const ALLOWED_SYMBOLS = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","EURUSD","GBPUSD","USDJPY","AUDUSD","USDCAD","USDCHF","NZDUSD","EURJPY","GBPJPY","XAGUSD","XAUUSD"];
-const EXPIRIES = { "1m": 60000, "5m": 300000, "10m": 600000, "15m": 900000, "30m": 1800000, "1h": 3600000 };
+const EXPIRIES = { "1m": 60000, "3m": 180000, "5m": 300000, "10m": 600000, "15m": 900000, "30m": 1800000, "1h": 3600000 };
 
 function send(res, status, data) {
   return res.status(status).json({ mode: "PAPER_ONLY", liveTradingEnabled: false, ...data });
@@ -238,7 +238,7 @@ export default async function handler(req, res, env = {}) {
       id: `paper-${now}-${Math.random().toString(36).slice(2, 9)}`,
       symbol, direction, expiry, amount, price, now, duration: EXPIRIES[expiry],
       source: body.source === "AUTO" ? "AUTO" : "MANUAL",
-      timeframe: ["1m","5m","10m","15m"].includes(String(body.timeframe || expiry)) ? String(body.timeframe || expiry) : expiry,
+      timeframe: ["1m","3m","5m","10m","15m"].includes(String(body.timeframe || expiry)) ? String(body.timeframe || expiry) : expiry,
       idempotencyKey: typeof body.idempotencyKey === "string" && /^[A-Za-z0-9:_|.-]{8,180}$/.test(body.idempotencyKey)
         ? body.idempotencyKey : null
     }, env);
