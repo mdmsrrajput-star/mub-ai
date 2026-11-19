@@ -360,8 +360,8 @@ footer{padding:14px 10px}
         <option value="GBPJPY">GBP/JPY</option>
       </optgroup>
     </select>
-    <div class="controls section"><button id="selectMarketButton" class="active">OPEN SELECTED MARKET</button><button id="refreshButton">Refresh now</button></div>
-    <div class="note">Choose any asset from one menu. Market coverage depends on your data provider plan. All MuB predictions are simulated; real orders remain disabled.</div>
+    <div class="controls section"><button id="refreshButton">Refresh selected asset</button></div>
+    <div class="note">Selecting an asset immediately switches MuB market data, chart, price, order book and available analysis. Market coverage depends on your data provider plan. All predictions are simulated; real orders remain disabled.</div>
     <div hidden aria-hidden="true">
       <select id="metalsSelect"><option value="XAUUSD">Gold</option><option value="XAGUSD">Silver</option></select>
       <select id="cryptoSelect"><option value="BTCUSDT">BTC</option><option value="ETHUSDT">ETH</option><option value="BNBUSDT">BNB</option><option value="SOLUSDT">SOL</option><option value="XRPUSDT">XRP</option><option value="ADAUSDT">ADA</option><option value="DOGEUSDT">DOGE</option></select>
@@ -2495,7 +2495,6 @@ $("assetSelector").addEventListener("change", () => {
   $("assetSelector").value = $(id).value;
   selectSymbol($(id).value);
 }));
-$("selectMarketButton").addEventListener("click", () => selectSymbol($("assetSelector").value));
 $("refreshButton").addEventListener("click",refreshAll);
 
 document.querySelectorAll("#timeframes button").forEach(b=>{
