@@ -1661,15 +1661,15 @@ async function refreshSignal() {
 async function refreshAll() {
   $("refreshButton").disabled=true;
   try {
-await Promise.all([
-  refreshGoldFeed(),
-  refresh24h(),
-  refreshSignal(),
-  refreshPaperAccount()
-]);
-    $("systemMessage").textContent=
-      "Public market data and signal refresh completed. "+
-      "Paper mode active; no real orders can be placed.";
+    if (symbol === "XAUUSD") {
+      await Promise.all([refreshGoldFeed(), refreshPaperAccount()]);
+    } else if (isForex) {
+      await Promise.all([loadHistory(), refreshForexSignal(), refreshPaperAccount()]);
+    } else {
+      await Promise.all([refresh24h(), refreshSignal(), refreshPaperAccount()]);
+    }
+    $("systemMessage").textContent =
+      symbolLabel(symbol) + " refreshed. Paper mode active; no real orders can be placed.";
   } catch(e) {
     $("systemMessage").textContent="Refresh error: "+e.message;
   } finally {
@@ -1732,7 +1732,8 @@ async function refreshPaperAccount() {
   }
 }
 function setMarketView(isGold) {
-  // Show only the selected market's own price card and market-specific dashboard.
+  // Only show data panels that belong to the selected asset class.
+  const isCrypto = !isGold && !isForex && CRYPTO_SYMBOLS.includes(symbol);
   const goldPanel = $("goldPanel");
   if (goldPanel) goldPanel.hidden = !isGold;
   const chartPanel = $("chartTitle").closest(".panel");
@@ -1748,8 +1749,12 @@ function setMarketView(isGold) {
   if (controls) controls.hidden = isGold;
   const terminal = $("advancedTerminal");
   const kpis = $("marketKpis");
-  if (terminal) terminal.hidden = isGold;
-  if (kpis) kpis.hidden = isGold;
+  if (terminal) terminal.hidden = !isCrypto;
+  if (kpis) kpis.hidden = !isCrypto;
+  const depth = $("depthPanel");
+  const flow = $("marketFlowPanel");
+  if (depth) depth.hidden = !isCrypto;
+  if (flow) flow.hidden = !isCrypto;
   if (isGold) {
     $("chartTitle").textContent = "Gold · XAU/USD";
     $("chartStatus").textContent = "Gold spot feed only. A verified historical gold chart and gold signal engine are not connected.";
@@ -1770,7 +1775,7 @@ async function selectSymbol(next) {
     setMarketView(false); stopMarketSocket(); stopPriceSocket();
     setStatus("connection", "FOREX FEED", true);
     $("chartTitle").textContent = symbolLabel(symbol) + " · " + timeframe;
-    $("priceLabel").textContent = symbolLabel(symbol) + " · FOREX PRICE";
+    $("priceLabel").textContent = symbolLabel(symbol) + (symbol === "XAGUSD" ? " · SILVER PRICE" : " · FOREX PRICE");
     $("livePrice").textContent = "Loading…"; $("priceChange").textContent = "Twelve Data forex feed";
     $("signalValue").textContent = "LOADING…"; $("signalScore").textContent = "Calculating forex indicators…";
     // Load the chart first; it also updates the displayed forex price, so avoid a duplicate price API call.
