@@ -21,6 +21,7 @@ export default async function handler(req, res, env = {}) {
   const requestedTimeframe = String(req.query?.timeframe || "5m");
   const timeframeMap = {
     "1m": { interval: "1m", seconds: 60, trend: "15m", trendSeconds: 900 },
+    "3m": { interval: "3m", seconds: 180, trend: "15m", trendSeconds: 900 },
     "5m": { interval: "5m", seconds: 300, trend: "15m", trendSeconds: 900 },
     "10m": { interval: "10m", seconds: 600, trend: "15m", trendSeconds: 900 },
     "15m": { interval: "15m", seconds: 900, trend: "1h", trendSeconds: 3600 },
@@ -31,7 +32,7 @@ export default async function handler(req, res, env = {}) {
     "1w": { interval: "1w", seconds: 604800, trend: "1M", trendSeconds: 2592000 }
   };
   const tf = timeframeMap[requestedTimeframe];
-  if (!tf) return res.status(400).json({ error: "Unsupported signal timeframe. Use 1m, 5m, 10m, 15m, 30m, 1h, 4h, 1d, or 1w." });
+  if (!tf) return res.status(400).json({ error: "Unsupported signal timeframe. Use 1m, 3m, 5m, 10m, 15m, 30m, 1h, 4h, 1d, or 1w." });
 
   const emaSeries = (values, period) => {
     const alpha = 2 / (period + 1);
