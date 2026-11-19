@@ -106,26 +106,41 @@ export default async function handler(req, res, env = {}) {
     const sourceInterval = interval === "10m" ? "1m" : interval;
     const sourceSeconds = interval === "10m" ? 60 : durationSeconds;
     const sourceLimit = interval === "10m" ? Math.min(1000, limit * 10 + 20) : limit;
-    const url =
-      "https://data-api.binance.vision/api/v3/klines" +
+    const query =
       "?symbol=" + encodeURIComponent(symbol) +
       "&interval=" + sourceInterval +
       "&limit=" + sourceLimit;
-
-    const response = await fetch(url, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(8000)
-    });
-
-    if (!response.ok) {
-      throw new Error("Market data HTTP " + response.status);
+    const providers = [
+      "https://data-api.binance.vision/api/v3/klines",
+      "https://api.binance.com/api/v3/klines",
+      "https://api1.binance.com/api/v3/klines",
+      "https://api2.binance.com/api/v3/klines"
+    ];
+    let rows = null;
+    let lastProviderError = "No market-data provider responded";
+    for (const endpoint of providers) {
+      try {
+        const response = await fetch(endpoint + query, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(6000)
+        });
+        if (!response.ok) {
+          lastProviderError = "Binance provider HTTP " + response.status;
+          continue;
+        }
+        const payload = await response.json();
+        if (!Array.isArray(payload)) {
+          lastProviderError = "Binance provider returned an invalid candle payload";
+          continue;
+        }
+        rows = payload;
+        break;
+      } catch (providerError) {
+        lastProviderError = String(providerError?.message || "Market-data request failed").slice(0, 140);
+      }
     }
-
-    const rows = await response.json();
-
-    if (!Array.isArray(rows)) {
-      throw new Error("Invalid market data");
-    }
+    if (!rows) throw new Error("All Binance candle endpoints failed: " + lastProviderError);
 
     const now = Math.floor(Date.now() / 1000);
 
@@ -528,15 +543,16 @@ export default async function handler(req, res, env = {}) {
         "Paper mode only; this endpoint never places orders."
     });
   } catch (error) {
-    console.error("Signal calculation failed:", error.message);
+    const diagnostic = String(error?.message || "Unknown market-data error").slice(0, 180);
+    console.error("MuB crypto signal calculation failed:", diagnostic);
 
     return res.status(502).json({
       mode: "PAPER_ONLY",
       executionEnabled: false,
       liveTradingEnabled: false,
       error: "Signal calculation failed",
-      detail:
-        "Market data unavailable or incomplete. Fail closed; do not trade."
+      detail: diagnostic,
+      diagnosticCode: "CRYPTO_SIGNAL_UPSTREAM_OR_CALCULATION_ERROR"
     });
   }
                 }
